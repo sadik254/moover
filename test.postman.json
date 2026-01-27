@@ -1,0 +1,268 @@
+{
+    "info": {
+        "name": "Smart API \u2013 Postman Collection",
+        "schema": "https:\/\/schema.getpostman.com\/json\/collection\/v2.1.0\/collection.json"
+    },
+    "item": [
+        {
+            "name": "Create Affiliate",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application\/json"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}\/api\/affiliates",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "affiliates"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"example_field\": \"\"\n}"
+                }
+            }
+        },
+        {
+            "name": "Create Affiliateclick",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application\/json"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}\/api\/affiliateclicks",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "affiliateclicks"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"example_field\": \"\"\n}"
+                }
+            }
+        },
+        {
+            "name": "Create Booking",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application\/json"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}\/api\/bookings",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "bookings"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"example_field\": \"\"\n}"
+                }
+            }
+        },
+        {
+            "name": "Create Company",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application\/json"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}\/api\/companies",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "companies"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"example_field\": \"\"\n}"
+                }
+            }
+        },
+        {
+            "name": "Create Customer",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application\/json"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}\/api\/customers",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "customers"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"example_field\": \"\"\n}"
+                }
+            }
+        },
+        {
+            "name": "Create Driver",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application\/json"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}\/api\/drivers",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "drivers"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"example_field\": \"\"\n}"
+                }
+            }
+        },
+        {
+            "name": "Create Formsubmission",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application\/json"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}\/api\/formsubmissions",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "formsubmissions"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"example_field\": \"\"\n}"
+                }
+            }
+        },
+        {
+            "name": "Create Formtemplate",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application\/json"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}\/api\/formtemplates",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "formtemplates"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"example_field\": \"\"\n}"
+                }
+            }
+        },
+        {
+            "name": "Create User",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application\/json"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}\/api\/users",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "users"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"example_field\": \"\"\n}"
+                }
+            }
+        },
+        {
+            "name": "Create Vehicle",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application\/json"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}\/api\/vehicles",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "vehicles"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"example_field\": \"\"\n}"
+                }
+            }
+        }
+    ]
+}
