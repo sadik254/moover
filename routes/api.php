@@ -28,11 +28,11 @@ Route::middleware('auth:sanctum')->get('user', [UserController::class, 'show']);
 Route::middleware('auth:sanctum')->post('/user/logout', [UserController::class, 'logout']);
 Route::middleware('auth:sanctum')->post('/user/update-password', [UserController::class, 'updatePassword']);
 
-Route::apiResource('companies', CompanyController::class);
+Route::middleware('auth:sanctum')->apiResource('companies', CompanyController::class);
 
-Route::apiResource('vehicles', VehicleController::class);
+Route::middleware('auth:sanctum')->apiResource('vehicles', VehicleController::class);
 
-Route::apiResource('drivers', DriverController::class);
+Route::middleware('auth:sanctum')->apiResource('drivers', DriverController::class);
 
 Route::apiResource('customers', CustomerController::class);
 
