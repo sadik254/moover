@@ -23,9 +23,9 @@ Route::post('user/login', [UserController::class, 'login']);
 // Route::post('user/forgot-password', [UserController::class, 'forgotPassword']);
 
 // Update user profile route with authentication middleware
-// Route::middleware('auth:sanctum')->post('/user/update', [UserController::class, 'update']);
-// Route::middleware('auth:sanctum')->get('user', [UserController::class, 'show']);
-// Route::middleware('auth:sanctum')->post('/user/logout', [UserController::class, 'logout']);
+Route::middleware('auth:sanctum')->post('/user/update', [UserController::class, 'update']);
+Route::middleware('auth:sanctum')->get('user', [UserController::class, 'show']);
+Route::middleware('auth:sanctum')->post('/user/logout', [UserController::class, 'logout']);
 Route::middleware('auth:sanctum')->post('/user/update-password', [UserController::class, 'updatePassword']);
 
 Route::apiResource('companies', CompanyController::class);

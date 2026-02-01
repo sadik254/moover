@@ -74,6 +74,55 @@ class UserController extends Controller
             ], 201);
     }
 
+    public function show(Request $request)
+    {
+        // Get the authenticated user
+        $user = $request->user(); // This will get the authenticated user
+
+        if (!$user) {
+            return response()->json(['error' => 'User not found.'], 404);
+        }
+
+        return response()->json($user);
+    }
+
+    public function update(Request $request)
+    {
+        $user = $request->user();
+        // \Log::info($request->all());
+
+        $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'email' => 'sometimes|email|unique:users,email,' . $user->id,
+        ]);
+
+        $data = $request->only(['name', 'email']);
+
+        // if ($request->hasFile('image')) {
+        //     $image = $request->file('image');
+        //     $path = $image->store('uploads/users', 'public');
+        //     $data['image'] = $path;
+        // }
+        
+
+        $user->update($data);
+        // Debugging: Log updated user
+        // \Log::info('User updated: ', $user->toArray());
+
+        return response()->json([
+            'message' => "Data Updated",
+            'user' => $user
+            ], 200);
+    }
+
+    public function logout(Request $request)
+    {
+        // Revoke the current user's token
+        $request->user()->currentAccessToken()->delete();
+
+        return response()->json(['message' => 'Logged out successfully'], 200);
+    }
+
     public function updatePassword(Request $request)
     {
         // dd('entered the method updatePassword');
