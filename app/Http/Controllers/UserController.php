@@ -1,0 +1,102 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\Validator;
+
+class UserController extends Controller
+{
+    //Methods for user registration, login, password reset, etc. would go here
+    public function login(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|min:6',
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user || !Hash::check($request->password, $user->password)) {
+            return response()->json(['message' => 'Invalid credentials'], 401);
+        }
+
+        // Create and return a token
+        // $token = $user->createToken('YourAppName')->plainTextToken;
+         // Create the token
+        $plainTextToken = $user->createToken('UserLogin')->plainTextToken;
+
+        // Extract the token part after the '|'
+        $token = explode('|', $plainTextToken)[1];
+
+        return response()->json([
+            'token' => $token, 
+            'user_id' => $user->id,
+            'message' => 'Login successful',
+            ], 200);
+    }
+
+    public function register(Request $request)
+    {
+        // dd('call register method');
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email',
+            'password' => 'required|min:6|confirmed',
+        ]);
+        // dd($request->all());
+
+        $data = $request->only(['name', 'email']);
+        $data['password'] = Hash::make($request->password);
+        // dd($data);
+
+        // if ($request->hasFile('image')) {
+        //     $image = $request->file('image');
+        //     $path = $image->store('uploads/users', 'public');
+        //     $data['image'] = $path;
+        // }
+
+        $user = User::create($data);
+
+        // $token = $user->createToken('YourAppName')->plainTextToken;
+        $plainTextToken = $user->createToken('UserRegistration')->plainTextToken;
+
+        // Extract the token part after the '|'
+        $token = explode('|', $plainTextToken)[1];
+
+        return response()->json([
+            'token' => $token, 
+            'user_id' => $user->id,
+            'message' => 'User registered successfully',
+            ], 201);
+    }
+
+    public function updatePassword(Request $request)
+    {
+        // dd('entered the method updatePassword');
+        $user = $request->user();
+        // dd($user);
+
+        // Validate the incoming request
+        $request->validate([
+            'current_password' => 'required',
+            'new_password' => 'required|min:6|confirmed',
+        ]);
+
+        // dd($request->all());
+
+        // Check if the current password is correct
+        if (!Hash::check($request->current_password, $user->password)) {
+            return response()->json(['error' => 'Current password is incorrect'], 400);
+        }
+
+        // Update the password
+        $user->password = Hash::make($request->new_password);
+        $user->save();
+
+        return response()->json(['message' => 'Password updated successfully'], 200);
+    }
+}
