@@ -13,9 +13,6 @@ use App\Http\Controllers\CompanyController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-// Route::get('/user', function (Request $request) {
-//     return $request->user();
-// })->middleware('auth:sanctum');
 
 // Register and login routes for Users without authentication middleware
 Route::post('user/register', [UserController::class, 'register']);
@@ -28,7 +25,11 @@ Route::middleware('auth:sanctum')->get('user', [UserController::class, 'show']);
 Route::middleware('auth:sanctum')->post('/user/logout', [UserController::class, 'logout']);
 Route::middleware('auth:sanctum')->post('/user/update-password', [UserController::class, 'updatePassword']);
 
-Route::middleware('auth:sanctum')->apiResource('companies', CompanyController::class);
+// Authenticated Company Routes
+Route::middleware('auth:sanctum')->post('/company', [CompanyController::class, 'store']);
+Route::middleware('auth:sanctum')->get('/company', [CompanyController::class, 'index']);
+Route::middleware('auth:sanctum')->post('/company/update', [CompanyController::class, 'update']);
+Route::middleware('auth:sanctum')->delete('/company', [CompanyController::class, 'destroy']);
 
 Route::middleware('auth:sanctum')->apiResource('vehicles', VehicleController::class);
 
