@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\VehicleClassController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AffiliateclickController;
 use App\Http\Controllers\AffiliateController;
@@ -31,6 +32,13 @@ Route::middleware('auth:sanctum')->get('/company', [CompanyController::class, 'i
 Route::middleware('auth:sanctum')->post('/company/update', [CompanyController::class, 'update']);
 Route::middleware('auth:sanctum')->delete('/company', [CompanyController::class, 'destroy']);
 
+// Authenticated Vehicle Class Routes
+Route::middleware('auth:sanctum')->get('/vehicle-classes', [VehicleClassController::class, 'index']);
+Route::middleware('auth:sanctum')->post('/vehicle-classes', [VehicleClassController::class, 'store']);
+Route::middleware('auth:sanctum')->get('/vehicle-classes/{id}', [VehicleClassController::class, 'show']);
+Route::middleware('auth:sanctum')->post('/vehicle-classes/update/{id}', [VehicleClassController::class, 'update']);
+Route::middleware('auth:sanctum')->delete('/vehicle-classes/{id}', [VehicleClassController::class, 'destroy']);
+
 Route::middleware('auth:sanctum')->apiResource('vehicles', VehicleController::class);
 
 Route::middleware('auth:sanctum')->apiResource('drivers', DriverController::class);
@@ -46,3 +54,5 @@ Route::apiResource('formsubmissions', FormsubmissionController::class);
 Route::apiResource('affiliates', AffiliateController::class);
 
 Route::apiResource('affiliateclicks', AffiliateclickController::class);
+
+Route::apiResource('vehicle_classes', VehicleClassController::class);
