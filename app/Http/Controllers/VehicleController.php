@@ -3,54 +3,250 @@
 namespace App\Http\Controllers;
 
 use App\Models\Vehicle;
+use App\Models\VehicleClass;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+use Uploadcare\Api;
+use Uploadcare\Configuration;
+use Illuminate\Validation\Rule;
 
 class VehicleController extends Controller
 {
-    public function index()
+    /**
+     * List all vehicles for logged-in user's company
+     */
+    public function index(Request $request)
     {
-        return Vehicle::all();
+        $company = $request->user()->company;
+
+        if (! $company) {
+            return response()->json([
+                'message' => 'Company not found'
+            ], 404);
+        }
+
+        $vehicles = Vehicle::where('company_id', $company->id)
+            ->with([
+                'vehicleClass:id,name'
+            ])
+            ->get();
+
+        return response()->json([
+            'data' => $vehicles
+        ]);
     }
 
+    /**
+     * Store a new vehicle
+     */
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'company_id' => 'required',
-            'name' => 'required|string|max:255',
-            'category' => 'required|string|max:255',
-            'capacity' => 'required',
-            'luggage' => 'required',
-            'hourly_rate' => 'nullable|string|max:255',
-            'per_km_rate' => 'nullable|string|max:255',
-            'airport_rate' => 'nullable|string|max:255'
+        $company = $request->user()->company;
+
+        if (! $company) {
+            return response()->json([
+                'message' => 'Company not found'
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'vehicle_class_id' => [
+                'required',
+                Rule::exists('vehicle_classes', 'id')
+                    ->where('company_id', $company->id),
+            ],
+            'name'         => 'required|string|max:255',
+            'category'     => 'required|string|max:100',
+            'capacity'     => 'required|integer|min:1',
+            'luggage'      => 'nullable|integer|min:0',
+            'hourly_rate'  => 'nullable|numeric|min:0',
+            'per_km_rate'  => 'nullable|numeric|min:0',
+            'airport_rate' => 'nullable|numeric|min:0',
+            'status'       => 'nullable|string|max:50',
+            'plate_number' => 'nullable|string|max:50|unique:vehicles,plate_number',
+            'color'        => 'nullable|string|max:50',
+            'model'        => 'nullable|string|max:100',
+            'image'        => 'nullable|file|image|max:5120',
         ]);
-        return Vehicle::create($request->only(['company_id', 'name', 'category', 'capacity', 'luggage', 'hourly_rate', 'per_km_rate', 'airport_rate']));
-    }
 
-    public function show(Vehicle $vehicle)
-    {
-        return $vehicle;
-    }
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors'  => $validator->errors()
+            ], 422);
+        }
 
-    public function update(Request $request, Vehicle $vehicle)
-    {
-        $validated = $request->validate([
-            'company_id' => 'required',
-            'name' => 'required|string|max:255',
-            'category' => 'required|string|max:255',
-            'capacity' => 'required',
-            'luggage' => 'required',
-            'hourly_rate' => 'nullable|string|max:255',
-            'per_km_rate' => 'nullable|string|max:255',
-            'airport_rate' => 'nullable|string|max:255'
+        $data = $request->only([
+            'vehicle_class_id',
+            'name',
+            'category',
+            'capacity',
+            'luggage',
+            'hourly_rate',
+            'per_km_rate',
+            'airport_rate',
+            'status',
+            'plate_number',
+            'color',
+            'model',
         ]);
-        $vehicle->update($validated);
-        return $vehicle;
+
+        // Uploadcare image
+        if ($request->hasFile('image')) {
+            $configuration = Configuration::create(
+                config('services.uploadcare.public_key'),
+                config('services.uploadcare.secret_key')
+            );
+
+            $api = new Api($configuration);
+
+            $file = $api->uploader()->fromPath(
+                $request->file('image')->getPathname()
+            );
+
+            $data['image'] = "https://ucarecdn.com/{$file->getUuid()}/-/preview/";
+        }
+
+        $vehicle = $company->vehicles()->create($data);
+
+        return response()->json([
+            'message' => 'Vehicle created successfully',
+            'data'    => $vehicle
+        ], 201);
     }
 
-    public function destroy(Vehicle $vehicle)
+    /**
+     * Show a single vehicle
+     */
+    public function show(Request $request, $id)
     {
+        $company = $request->user()->company;
+
+        $vehicle = Vehicle::with('vehicleClass:id,name')
+            ->where('company_id', $company->id)
+            ->where('id', $id)
+            ->first();
+
+        if (! $vehicle) {
+            return response()->json([
+                'message' => 'Vehicle not found'
+            ], 404);
+        }
+
+        return response()->json([
+            'data' => $vehicle
+        ]);
+    }
+
+    /**
+     * Update vehicle (partial update)
+     */
+    public function update(Request $request, $id)
+    {
+        $company = $request->user()->company;
+
+        $vehicle = Vehicle::where('company_id', $company->id)
+            ->where('id', $id)
+            ->first();
+
+        if (! $vehicle) {
+            return response()->json([
+                'message' => 'Vehicle not found'
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'vehicle_class_id' => [
+                'sometimes',
+                Rule::exists('vehicle_classes', 'id')
+                    ->where('company_id', $company->id),
+            ],
+            'name'         => 'sometimes|required|string|max:255',
+            'category'     => 'sometimes|nullable|string|max:100',
+            'capacity'     => 'sometimes|nullable|integer|min:1',
+            'luggage'      => 'sometimes|nullable|integer|min:0',
+            'hourly_rate'  => 'sometimes|nullable|numeric|min:0',
+            'per_km_rate'  => 'sometimes|nullable|numeric|min:0',
+            'airport_rate' => 'sometimes|nullable|numeric|min:0',
+            'status'       => 'sometimes|nullable|string|max:50',
+            'plate_number' => [
+                'sometimes',
+                'nullable',
+                Rule::unique('vehicles', 'plate_number')->ignore($vehicle->id),
+            ],
+            'color' => 'sometimes|nullable|string|max:50',
+            'model' => 'sometimes|nullable|string|max:100',
+            'image' => 'sometimes|nullable|file|image|max:5120',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors'  => $validator->errors()
+            ], 422);
+        }
+
+        if ($request->hasFile('image')) {
+            $configuration = Configuration::create(
+                config('services.uploadcare.public_key'),
+                config('services.uploadcare.secret_key')
+            );
+
+            $api = new Api($configuration);
+
+            $file = $api->uploader()->fromPath(
+                $request->file('image')->getPathname()
+            );
+
+            $vehicle->image = "https://ucarecdn.com/{$file->getUuid()}/-/preview/";
+        }
+
+        $vehicle->fill(
+            $request->only([
+                'vehicle_class_id',
+                'name',
+                'category',
+                'capacity',
+                'luggage',
+                'hourly_rate',
+                'per_km_rate',
+                'airport_rate',
+                'status',
+                'plate_number',
+                'color',
+                'model',
+            ])
+        );
+
+        $vehicle->save();
+
+        return response()->json([
+            'message' => 'Vehicle updated successfully',
+            'data'    => $vehicle
+        ]);
+    }
+
+    /**
+     * Delete vehicle
+     */
+    public function destroy(Request $request, $id)
+    {
+        $company = $request->user()->company;
+
+        $vehicle = Vehicle::where('company_id', $company->id)
+            ->where('id', $id)
+            ->first();
+
+        if (! $vehicle) {
+            return response()->json([
+                'message' => 'Vehicle not found'
+            ], 404);
+        }
+
         $vehicle->delete();
-        return response()->json(['message' => 'success'], 200);
+
+        return response()->json([
+            'message' => 'Vehicle deleted successfully'
+        ]);
     }
 }

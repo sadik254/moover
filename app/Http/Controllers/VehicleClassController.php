@@ -82,6 +82,7 @@ class VehicleClassController extends Controller
         $company = $request->user()->company;
 
         $vehicleClass = VehicleClass::where('company_id', $company->id)
+            ->with('vehicles')
             ->where('id', $id)
             ->first();
 

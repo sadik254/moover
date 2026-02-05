@@ -39,7 +39,12 @@ Route::middleware('auth:sanctum')->get('/vehicle-classes/{id}', [VehicleClassCon
 Route::middleware('auth:sanctum')->post('/vehicle-classes/update/{id}', [VehicleClassController::class, 'update']);
 Route::middleware('auth:sanctum')->delete('/vehicle-classes/{id}', [VehicleClassController::class, 'destroy']);
 
-Route::middleware('auth:sanctum')->apiResource('vehicles', VehicleController::class);
+// Authenticated Vehicle Routes
+Route::middleware('auth:sanctum')->get('/vehicles', [VehicleController::class, 'index']);
+Route::middleware('auth:sanctum')->post('/vehicles', [VehicleController::class, 'store']);
+Route::middleware('auth:sanctum')->get('/vehicles/{id}', [VehicleController::class, 'show']);
+Route::middleware('auth:sanctum')->post('/vehicles/update/{id}', [VehicleController::class, 'update']);
+Route::middleware('auth:sanctum')->delete('/vehicles/{id}', [VehicleController::class, 'destroy']);
 
 Route::middleware('auth:sanctum')->apiResource('drivers', DriverController::class);
 
