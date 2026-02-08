@@ -277,4 +277,57 @@ class CustomerController extends Controller
 
         return response()->json(['message' => 'Logged out successfully'], 200);
     }
+
+    // Customer: update own profile
+    public function selfUpdate(Request $request)
+    {
+        $customer = $request->user();
+
+        if (! $customer instanceof Customer) {
+            return response()->json([
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'name'                    => 'sometimes|nullable|string|max:255',
+            'email'                   => [
+                'sometimes',
+                'nullable',
+                'email',
+                'max:255',
+                Rule::unique('customers', 'email')->ignore($customer->id),
+            ],
+            'phone'                   => 'sometimes|nullable|string|max:255',
+            'customer_company'        => 'sometimes|nullable|string|max:255',
+            'password'                => 'sometimes|nullable|min:6|confirmed',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors'  => $validator->errors()
+            ], 422);
+        }
+
+        $customer->fill(
+            $request->only([
+                'name',
+                'email',
+                'phone',
+                'customer_company',
+            ])
+        );
+
+        if ($request->filled('password')) {
+            $customer->password = Hash::make($request->password);
+        }
+
+        $customer->save();
+
+        return response()->json([
+            'message' => 'Profile updated successfully',
+            'data' => $customer
+        ], 200);
+    }
 }

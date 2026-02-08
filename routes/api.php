@@ -57,6 +57,7 @@ Route::middleware(['auth:sanctum', 'user.only'])->delete('drivers/{id}', [Driver
 Route::post('customer/register', [CustomerController::class, 'register']);
 Route::post('customer/login', [CustomerController::class, 'login']);
 Route::middleware(['auth:sanctum', 'abilities:customer'])->post('customer/logout', [CustomerController::class, 'logout']);
+Route::middleware(['auth:sanctum', 'abilities:customer'])->post('customer/self-update', [CustomerController::class, 'selfUpdate']);
 
 // Authenticated Customer Routes For Admin & Dispatcher
 Route::middleware(['auth:sanctum', 'user.only'])->get('customers', [CustomerController::class, 'index']);
