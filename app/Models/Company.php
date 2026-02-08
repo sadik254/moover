@@ -34,4 +34,8 @@ class Company extends Model
         {
             return $this->hasMany(Vehicle::class);
         }
+        public function drivers()
+        {
+            return $this->hasMany(Driver::class);
+        }
 }

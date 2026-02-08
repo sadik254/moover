@@ -26,8 +26,8 @@ class UserController extends Controller
 
         // Create and return a token
         // $token = $user->createToken('YourAppName')->plainTextToken;
-         // Create the token
-        $plainTextToken = $user->createToken('UserLogin')->plainTextToken;
+        // Create the token with user ability
+        $plainTextToken = $user->createToken('UserLogin', ['user'])->plainTextToken;
 
         // Extract the token part after the '|'
         $token = explode('|', $plainTextToken)[1];
@@ -62,7 +62,7 @@ class UserController extends Controller
         $user = User::create($data);
 
         // $token = $user->createToken('YourAppName')->plainTextToken;
-        $plainTextToken = $user->createToken('UserRegistration')->plainTextToken;
+        $plainTextToken = $user->createToken('UserRegistration', ['user'])->plainTextToken;
 
         // Extract the token part after the '|'
         $token = explode('|', $plainTextToken)[1];
