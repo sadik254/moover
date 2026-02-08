@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class UserController extends Controller
 {
@@ -51,6 +52,7 @@ class UserController extends Controller
 
         $data = $request->only(['name', 'email']);
         $data['password'] = Hash::make($request->password);
+        $data['user_type'] = 'admin';
         // dd($data);
 
         // if ($request->hasFile('image')) {
@@ -147,5 +149,40 @@ class UserController extends Controller
         $user->save();
 
         return response()->json(['message' => 'Password updated successfully'], 200);
+    }
+
+    public function createDispatcher(Request $request)
+    {
+        $user = $request->user();
+
+        if (! $user || $user->user_type !== 'admin') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'name'  => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors'  => $validator->errors()
+            ], 422);
+        }
+
+        $generatedPassword = Str::upper(Str::random(6));
+
+        $data = $request->only(['name', 'email']);
+        $data['password'] = Hash::make($generatedPassword);
+        $data['user_type'] = 'dispatcher';
+
+        $dispatcher = User::create($data);
+
+        return response()->json([
+            'message' => 'Dispatcher created successfully',
+            'data' => $dispatcher,
+            'generated_password' => $generatedPassword
+        ], 201);
     }
 }

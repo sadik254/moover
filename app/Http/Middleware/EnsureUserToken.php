@@ -9,7 +9,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EnsureUserToken
 {
-    public function handle(Request $request, Closure $next): Response
+    public function handle(Request $request, Closure $next, ...$allowedTypes): Response
     {
         $user = $request->user();
 
@@ -17,6 +17,17 @@ class EnsureUserToken
             return response()->json([
                 'message' => 'Unauthorized'
             ], 403);
+        }
+
+        if (! empty($allowedTypes)) {
+            $allowedTypes = array_map('strtolower', $allowedTypes);
+            $userType = strtolower((string) $user->user_type);
+
+            if (! in_array($userType, $allowedTypes, true)) {
+                return response()->json([
+                    'message' => 'Unauthorized'
+                ], 403);
+            }
         }
 
         return $next($request);
