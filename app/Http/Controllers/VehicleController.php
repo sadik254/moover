@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Company;
 use App\Models\Vehicle;
 use App\Models\VehicleClass;
 use Illuminate\Http\Request;
@@ -17,7 +18,7 @@ class VehicleController extends Controller
      */
     public function index(Request $request)
     {
-        $company = $request->user()->company;
+        $company = Company::first();
 
         if (! $company) {
             return response()->json([
@@ -41,7 +42,7 @@ class VehicleController extends Controller
      */
     public function store(Request $request)
     {
-        $company = $request->user()->company;
+        $company = Company::first();
 
         if (! $company) {
             return response()->json([
@@ -56,7 +57,7 @@ class VehicleController extends Controller
                     ->where('company_id', $company->id),
             ],
             'name'         => 'required|string|max:255',
-            'category'     => 'required|string|max:100',
+            'category'     => 'nullable|string|max:100',
             'capacity'     => 'required|integer|min:1',
             'luggage'      => 'nullable|integer|min:0',
             'hourly_rate'  => 'nullable|numeric|min:0',
@@ -120,7 +121,13 @@ class VehicleController extends Controller
      */
     public function show(Request $request, $id)
     {
-        $company = $request->user()->company;
+        $company = Company::first();
+
+        if (! $company) {
+            return response()->json([
+                'message' => 'Company not found'
+            ], 404);
+        }
 
         $vehicle = Vehicle::with('vehicleClass:id,name')
             ->where('company_id', $company->id)
@@ -143,7 +150,13 @@ class VehicleController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $company = $request->user()->company;
+        $company = Company::first();
+
+        if (! $company) {
+            return response()->json([
+                'message' => 'Company not found'
+            ], 404);
+        }
 
         $vehicle = Vehicle::where('company_id', $company->id)
             ->where('id', $id)
@@ -231,7 +244,13 @@ class VehicleController extends Controller
      */
     public function destroy(Request $request, $id)
     {
-        $company = $request->user()->company;
+        $company = Company::first();
+
+        if (! $company) {
+            return response()->json([
+                'message' => 'Company not found'
+            ], 404);
+        }
 
         $vehicle = Vehicle::where('company_id', $company->id)
             ->where('id', $id)

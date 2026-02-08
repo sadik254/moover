@@ -21,7 +21,7 @@ Route::post('user/login', [UserController::class, 'login']);
 // Route::post('user/forgot-password', [UserController::class, 'forgotPassword']);
 
 // Admin: create dispatcher
-Route::middleware(['auth:sanctum', 'user.only'])->post('user/create-dispatcher', [UserController::class, 'createDispatcher']);
+Route::middleware(['auth:sanctum', 'user.only:admin'])->post('user/create-dispatcher', [UserController::class, 'createDispatcher']);
 
 // Update user profile route with authentication middleware
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('/user/update', [UserController::class, 'update']);

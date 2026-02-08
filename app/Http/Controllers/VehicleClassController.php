@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Company;
 use App\Models\VehicleClass;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -12,7 +13,7 @@ class VehicleClassController extends Controller
 {
     public function index(Request $request)
     {
-        $company = auth()->user()->company;
+        $company = Company::first();
 
         if (! $company) {
             return response()->json([
@@ -29,7 +30,7 @@ class VehicleClassController extends Controller
 
     public function store(Request $request)
     {
-        $company = $request->user()->company;
+        $company = Company::first();
 
         if (! $company) {
             return response()->json([
@@ -79,7 +80,13 @@ class VehicleClassController extends Controller
 
     public function show(Request $request, $id)
     {
-        $company = $request->user()->company;
+        $company = Company::first();
+
+        if (! $company) {
+            return response()->json([
+                'message' => 'Company not found'
+            ], 404);
+        }
 
         $vehicleClass = VehicleClass::where('company_id', $company->id)
             ->with('vehicles')
@@ -99,7 +106,7 @@ class VehicleClassController extends Controller
 
     public function update(Request $request, $id)
     {
-        $company = $request->user()->company;
+        $company = Company::first();
 
         if (! $company) {
             return response()->json([
@@ -168,7 +175,13 @@ class VehicleClassController extends Controller
 
     public function destroy(Request $request, $id)
     {
-        $company = $request->user()->company;
+        $company = Company::first();
+
+        if (! $company) {
+            return response()->json([
+                'message' => 'Company not found'
+            ], 404);
+        }
 
         $vehicleClass = VehicleClass::where('company_id', $company->id)
             ->where('id', $id)

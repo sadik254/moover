@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Company;
 use App\Models\Customer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -14,7 +15,7 @@ class CustomerController extends Controller
     // Admin: list customers for company
     public function index(Request $request)
     {
-        $company = $request->user()->company;
+        $company = Company::first();
 
         if (! $company) {
             return response()->json([
@@ -32,7 +33,7 @@ class CustomerController extends Controller
     // Admin: create customer with auto-generated password
     public function store(Request $request)
     {
-        $company = $request->user()->company;
+        $company = Company::first();
 
         if (! $company) {
             return response()->json([
@@ -42,7 +43,7 @@ class CustomerController extends Controller
 
         $validator = Validator::make($request->all(), [
             'name'                    => 'nullable|string|max:255',
-            'email'                   => 'nullable|email|max:255|unique:customers,email',
+            'email'                   => 'required|email|max:255|unique:customers,email',
             'phone'                   => 'required|string|max:255',
             'customer_company'        => 'nullable|string|max:255',
             'customer_type'           => 'nullable|string|max:100',
@@ -83,16 +84,20 @@ class CustomerController extends Controller
     // Customer: self register with own password
     public function register(Request $request)
     {
+        $company = Company::first();
+
+        if (! $company) {
+            return response()->json([
+                'message' => 'Company not found'
+            ], 404);
+        }
+
         $validator = Validator::make($request->all(), [
-            'company_id'              => 'required|exists:companies,id',
             'name'                    => 'required|string|max:255',
             'email'                   => 'required|email|max:255|unique:customers,email',
             'phone'                   => 'required|string|max:255',
             'password'                => 'required|min:6|confirmed',
             'customer_company'        => 'nullable|string|max:255',
-            'customer_type'           => 'nullable|string|max:100',
-            'dispatch_note'           => 'nullable|string',
-            'preferred_service_level' => 'nullable|string|max:100',
         ]);
 
         if ($validator->fails()) {
@@ -103,15 +108,12 @@ class CustomerController extends Controller
         }
 
         $data = $request->only([
-            'company_id',
             'name',
             'email',
             'phone',
             'customer_company',
-            'customer_type',
-            'dispatch_note',
-            'preferred_service_level',
         ]);
+        $data['company_id'] = $company->id;
         $data['password'] = Hash::make($request->password);
 
         $customer = Customer::create($data);
@@ -152,7 +154,7 @@ class CustomerController extends Controller
 
     public function show(Request $request, $id)
     {
-        $company = $request->user()->company;
+        $company = Company::first();
 
         if (! $company) {
             return response()->json([
@@ -177,7 +179,7 @@ class CustomerController extends Controller
 
     public function update(Request $request, $id)
     {
-        $company = $request->user()->company;
+        $company = Company::first();
 
         if (! $company) {
             return response()->json([
@@ -245,7 +247,7 @@ class CustomerController extends Controller
 
     public function destroy(Request $request, $id)
     {
-        $company = $request->user()->company;
+        $company = Company::first();
 
         if (! $company) {
             return response()->json([

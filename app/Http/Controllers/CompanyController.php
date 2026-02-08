@@ -12,17 +12,26 @@ class CompanyController extends Controller
 {
     public function index(Request $request)
     {
+        $company = Company::first();
+
+        if (! $company) {
+            return response()->json([
+                'message' => 'Company not found'
+            ], 404);
+        }
+
         return response()->json([
-            'data' => $request->user()->company
+            'data' => $company
         ]);
     }
 
     public function store(Request $request)
     {
         $user = $request->user();
+        $existingCompany = Company::first();
 
-        // Enforce 1 user → 1 company
-        if ($user->company) {
+        // Enforce single company
+        if ($existingCompany) {
             return response()->json([
                 'message' => 'You already have a company'
             ], 403);
@@ -83,7 +92,7 @@ class CompanyController extends Controller
 
     public function show(Request $request)
     {
-        $company = $request->user()->company;
+        $company = Company::first();
 
         if (! $company) {
             return response()->json([
@@ -98,15 +107,13 @@ class CompanyController extends Controller
 
     public function update(Request $request)
     {
-        $company = $request->user()->company;
+        $company = Company::first();
 
         if (! $company) {
             return response()->json([
                 'message' => 'Company not found'
             ], 404);
         }
-
-        // dd($company);
 
         $validator = Validator::make($request->all(), [
             'name'     => 'sometimes|required|string|max:255',
@@ -117,8 +124,6 @@ class CompanyController extends Controller
             'logo'     => 'sometimes|nullable|file|image|max:5120',
             'url'      => 'sometimes|nullable|string|max:255',
         ]);
-
-        // dd($request->all());
 
         if ($validator->fails()) {
             return response()->json([
@@ -143,8 +148,6 @@ class CompanyController extends Controller
             $company->logo = "https://ucarecdn.com/{$file->getUuid()}/-/preview/";
         }
 
-        // dd($request->all());
-
         // Update only provided fields
         $company->fill(
             $request->only([
@@ -157,8 +160,6 @@ class CompanyController extends Controller
             ])
         );
 
-        // dd($company);
-
         $company->save();
 
         return response()->json([
@@ -169,7 +170,7 @@ class CompanyController extends Controller
 
     public function destroy(Request $request)
     {
-        $company = $request->user()->company;
+        $company = Company::first();
 
         if (! $company) {
             return response()->json([

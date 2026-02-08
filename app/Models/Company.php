@@ -15,8 +15,6 @@ class Company extends Model
         'phone', 
         'address', 
         'timezone', 
-        'created_at', 
-        'updated_at',
         // 'user_id',
         'logo',
         'url'
