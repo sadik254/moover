@@ -4,6 +4,10 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Company;
+use App\Models\Customer;
+use App\Models\Driver;
+use App\Models\Vehicle;
 
 class Booking extends Model
 {
@@ -36,4 +40,24 @@ class Booking extends Model
         'status',
         'notes',
     ];
+
+    public function company()
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
+    public function vehicle()
+    {
+        return $this->belongsTo(Vehicle::class);
+    }
+
+    public function driver()
+    {
+        return $this->belongsTo(Driver::class);
+    }
 }

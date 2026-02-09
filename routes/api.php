@@ -11,6 +11,7 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DriverController;
 use App\Http\Controllers\VehicleController;
 use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\SystemConfigController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -34,6 +35,11 @@ Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('/compan
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('/company', [CompanyController::class, 'index']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('/company/update', [CompanyController::class, 'update']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->delete('/company', [CompanyController::class, 'destroy']);
+
+// System Config Routes
+Route::get('/system-config', [SystemConfigController::class, 'index']);
+Route::middleware(['auth:sanctum', 'user.only:admin'])->post('/system-config', [SystemConfigController::class, 'store']);
+Route::middleware(['auth:sanctum', 'user.only:admin'])->post('/system-config/update', [SystemConfigController::class, 'update']);
 
 // Authenticated Vehicle Class Routes
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('/vehicle-classes', [VehicleClassController::class, 'index']);

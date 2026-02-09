@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\SystemConfig;
 
 class Company extends Model
 {
@@ -35,5 +36,10 @@ class Company extends Model
         public function drivers()
         {
             return $this->hasMany(Driver::class);
+        }
+
+        public function systemConfig()
+        {
+            return $this->hasOne(SystemConfig::class);
         }
 }
