@@ -75,7 +75,12 @@ Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('customer
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('customers/update/{id}', [CustomerController::class, 'update']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->delete('customers/{id}', [CustomerController::class, 'destroy']);
 
-Route::apiResource('bookings', BookingController::class);
+// Booking routes
+Route::post('bookings', [BookingController::class, 'store']); // public: quote + create
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings', [BookingController::class, 'index']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings/{id}', [BookingController::class, 'show']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('bookings/update/{id}', [BookingController::class, 'update']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->delete('bookings/{id}', [BookingController::class, 'destroy']);
 
 Route::apiResource('formtemplates', FormtemplateController::class);
 

@@ -16,9 +16,7 @@ return new class extends Migration {
             $table->decimal('gratuity', 10, 2)->nullable()->after('taxes');
             $table->decimal('parking', 10, 2)->nullable()->after('gratuity');
             $table->decimal('others', 10, 2)->nullable()->after('parking');
-            $table->decimal('final_price', 10, 2)->nullable()->after('total_price');
-
-            $table->string('payment_method')->nullable()->after('final_price');
+            $table->string('payment_method')->nullable()->after('others');
             $table->string('payment_status')->nullable()->after('payment_method');
         });
     }
