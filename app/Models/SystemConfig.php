@@ -17,6 +17,7 @@ class SystemConfig extends Model
         'cancellation_fee',
         'surge_rate',
         'wait_time_rate',
+        'rate_buffer',
         'currency',
         'service_zones',
         'platform_name',
