@@ -228,6 +228,14 @@ class BookingController extends Controller
                     $data['name'] = $authUser->name;
                     $data['email'] = $authUser->email;
                     $data['phone'] = $authUser->phone;
+                } elseif (! empty($data['customer_id'])) {
+                    $selectedCustomer = Customer::find($data['customer_id']);
+
+                    if ($selectedCustomer) {
+                        $data['name'] = $selectedCustomer->name;
+                        $data['email'] = $selectedCustomer->email;
+                        $data['phone'] = $selectedCustomer->phone;
+                    }
                 }
 
                 $booking = Booking::create($data);
