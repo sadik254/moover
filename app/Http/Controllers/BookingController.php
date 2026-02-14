@@ -91,9 +91,21 @@ class BookingController extends Controller
             ], 422);
         }
 
-        $authUser = $request->user();
-        if ($authUser instanceof Customer) {
-            if ($request->filled('customer_id') && (int) $request->customer_id !== (int) $authUser->id) {
+        $authUser = auth('sanctum')->user() ?? $request->user();
+        if ($request->filled('customer_id')) {
+            if ($authUser instanceof User) {
+                if (! in_array((string) $authUser->user_type, ['admin', 'dispatcher'], true)) {
+                    return response()->json([
+                        'message' => 'Unauthorized customer_id'
+                    ], 403);
+                }
+            } elseif ($authUser instanceof Customer) {
+                if ((int) $request->customer_id !== (int) $authUser->id) {
+                    return response()->json([
+                        'message' => 'Unauthorized customer_id'
+                    ], 403);
+                }
+            } else {
                 return response()->json([
                     'message' => 'Unauthorized customer_id'
                 ], 403);
@@ -163,7 +175,7 @@ class BookingController extends Controller
         }
 
         try {
-            $booking = DB::transaction(function () use ($request, $company, $vehicle) {
+            $booking = DB::transaction(function () use ($request, $company, $vehicle, $authUser) {
                 $systemConfig = $this->getSystemConfig($company->id);
                 $priceCalculation = $this->calculatePrice($vehicle, $this->buildPriceInput($request, $systemConfig));
 
@@ -211,7 +223,6 @@ class BookingController extends Controller
                 $data['total_price'] = $priceCalculation['total_price'];
                 $data['final_price'] = $priceCalculation['total_price'];
 
-                $authUser = $request->user();
                 if ($authUser instanceof Customer) {
                     $data['customer_id'] = $authUser->id;
                     $data['name'] = $authUser->name;
