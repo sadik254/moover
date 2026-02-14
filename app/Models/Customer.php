@@ -38,4 +38,14 @@ class Customer extends Authenticatable
     {
         return $this->belongsTo(Company::class);
     }
+
+    public function bookings()
+    {
+        return $this->hasMany(Booking::class);
+    }
+
+    public function payments()
+    {
+        return $this->hasMany(BookingPayment::class);
+    }
 }

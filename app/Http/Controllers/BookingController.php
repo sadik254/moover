@@ -12,6 +12,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class BookingController extends Controller
@@ -223,6 +224,11 @@ class BookingController extends Controller
                 $data['total_price'] = $priceCalculation['total_price'];
                 $data['final_price'] = $priceCalculation['total_price'];
 
+                $isGuestBooking = ! ($authUser instanceof Customer) && ! ($authUser instanceof User);
+                if ($isGuestBooking) {
+                    $data['booking_access_token'] = Str::random(64);
+                }
+
                 if ($authUser instanceof Customer) {
                     $data['customer_id'] = $authUser->id;
                     $data['name'] = $authUser->name;
@@ -240,18 +246,28 @@ class BookingController extends Controller
 
                 $booking = Booking::create($data);
                 $booking->setAttribute('price_calculation', $priceCalculation);
+                if ($isGuestBooking) {
+                    $booking->setAttribute('issued_booking_access_token', $data['booking_access_token']);
+                }
 
                 return $booking;
             });
 
             $freshBooking = $booking->fresh();
             $calc = $booking->getAttribute('price_calculation');
+            $issuedBookingAccessToken = $booking->getAttribute('issued_booking_access_token');
 
-            return response()->json([
+            $response = [
                 'message' => 'Booking created successfully',
                 'data' => $freshBooking,
                 'calculation' => $this->buildCalculationBreakdown($calc),
-            ], 201);
+            ];
+
+            if ($issuedBookingAccessToken) {
+                $response['booking_access_token'] = $issuedBookingAccessToken;
+            }
+
+            return response()->json($response, 201);
 
         } catch (\Exception $e) {
             return response()->json([

@@ -12,6 +12,7 @@ use App\Http\Controllers\DriverController;
 use App\Http\Controllers\VehicleController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\SystemConfigController;
+use App\Http\Controllers\BookingPaymentController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -81,6 +82,12 @@ Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings/{id}', [BookingController::class, 'show']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('bookings/update/{id}', [BookingController::class, 'update']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->delete('bookings/{id}', [BookingController::class, 'destroy']);
+
+// Booking payment routes
+Route::post('payments/webhook/stripe', [BookingPaymentController::class, 'webhook']);
+Route::middleware(['auth:sanctum'])->get('bookings/{id}/payment', [BookingPaymentController::class, 'show']);
+Route::post('bookings/{id}/payment/authorize', [BookingPaymentController::class, 'authorizePayment']);
+Route::middleware(['auth:sanctum'])->post('bookings/{id}/payment/capture', [BookingPaymentController::class, 'capturePayment']);
 
 Route::apiResource('formtemplates', FormtemplateController::class);
 

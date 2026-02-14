@@ -8,6 +8,7 @@ use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Driver;
 use App\Models\Vehicle;
+use App\Models\BookingPayment;
 
 class Booking extends Model
 {
@@ -16,6 +17,7 @@ class Booking extends Model
     protected $fillable = [
         'company_id',
         'customer_id',
+        'booking_access_token',
         'name',
         'email',
         'phone',
@@ -56,6 +58,10 @@ class Booking extends Model
         'notes',
     ];
 
+    protected $hidden = [
+        'booking_access_token',
+    ];
+
     public function company()
     {
         return $this->belongsTo(Company::class);
@@ -74,5 +80,15 @@ class Booking extends Model
     public function driver()
     {
         return $this->belongsTo(Driver::class);
+    }
+
+    public function payments()
+    {
+        return $this->hasMany(BookingPayment::class);
+    }
+
+    public function latestPayment()
+    {
+        return $this->hasOne(BookingPayment::class)->latestOfMany();
     }
 }
