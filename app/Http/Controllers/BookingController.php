@@ -68,9 +68,10 @@ class BookingController extends Controller
             ],
             'hours'           => 'nullable|numeric|min:0',
             'extras_price'    => 'nullable|numeric|min:0',
-            'gratuity'        => 'nullable|numeric|min:0',
             'parking'         => 'nullable|numeric|min:0',
             'others'          => 'nullable|numeric|min:0',
+            'airport_fees'    => 'nullable|numeric|min:0',
+            'congestion_charge' => 'nullable|numeric|min:0',
             'payment_method'  => 'nullable|string|max:100',
             'payment_status'  => 'nullable|string|max:100',
             'status'          => ['nullable', Rule::in(['pending', 'confirmed', 'assigned', 'on_route', 'completed', 'cancelled'])],
@@ -186,9 +187,10 @@ class BookingController extends Controller
                     'distance_km',
                     'hours',
                     'extras_price',
-                    'gratuity',
                     'parking',
                     'others',
+                    'airport_fees',
+                    'congestion_charge',
                     'payment_method',
                     'payment_status',
                     'status',
@@ -197,7 +199,15 @@ class BookingController extends Controller
 
                 $data['company_id'] = $company->id;
                 $data['base_price'] = $priceCalculation['base_price'];
-                $data['taxes'] = $priceCalculation['taxes'];
+                $data['taxes'] = $priceCalculation['tax_rate'];
+                $data['taxes_amount'] = $priceCalculation['taxes_amount'];
+                $data['gratuity'] = $priceCalculation['gratuity_percentage'];
+                $data['gratuity_amount'] = $priceCalculation['gratuity_amount'];
+                $data['rate_buffer'] = $priceCalculation['rate_buffer'];
+                $data['rate_buffer_amount'] = $priceCalculation['buffer_amount'];
+                $data['surge_rate'] = $priceCalculation['surge_rate'];
+                $data['surge_rate_amount'] = $priceCalculation['surge_rate_amount'];
+                $data['cancellation_fee'] = $priceCalculation['cancellation_fee'];
                 $data['total_price'] = $priceCalculation['total_price'];
                 $data['final_price'] = $priceCalculation['total_price'];
 
@@ -305,9 +315,10 @@ class BookingController extends Controller
             ],
             'hours'           => 'sometimes|nullable|numeric|min:0',
             'extras_price'    => 'sometimes|nullable|numeric|min:0',
-            'gratuity'        => 'sometimes|nullable|numeric|min:0',
             'parking'         => 'sometimes|nullable|numeric|min:0',
             'others'          => 'sometimes|nullable|numeric|min:0',
+            'airport_fees'    => 'sometimes|nullable|numeric|min:0',
+            'congestion_charge' => 'sometimes|nullable|numeric|min:0',
             'payment_method'  => 'sometimes|nullable|string|max:100',
             'payment_status'  => 'sometimes|nullable|string|max:100',
             'status'          => ['sometimes', Rule::in(['pending', 'confirmed', 'assigned', 'on_route', 'completed', 'cancelled'])],
@@ -390,9 +401,10 @@ class BookingController extends Controller
                         'distance_km',
                         'hours',
                         'extras_price',
-                        'gratuity',
                         'parking',
                         'others',
+                        'airport_fees',
+                        'congestion_charge',
                         'payment_method',
                         'payment_status',
                         'status',
@@ -406,9 +418,10 @@ class BookingController extends Controller
                     'distance_km',
                     'hours',
                     'extras_price',
-                    'gratuity',
                     'parking',
-                    'others'
+                    'others',
+                    'airport_fees',
+                    'congestion_charge'
                 ]);
 
                 $latestPriceCalculation = null;
@@ -418,7 +431,15 @@ class BookingController extends Controller
                     $priceCalculation = $this->calculatePrice($vehicle, $this->buildPriceInput($booking, $systemConfig));
 
                     $booking->base_price = $priceCalculation['base_price'];
-                    $booking->taxes = $priceCalculation['taxes'];
+                    $booking->taxes = $priceCalculation['tax_rate'];
+                    $booking->taxes_amount = $priceCalculation['taxes_amount'];
+                    $booking->gratuity = $priceCalculation['gratuity_percentage'];
+                    $booking->gratuity_amount = $priceCalculation['gratuity_amount'];
+                    $booking->rate_buffer = $priceCalculation['rate_buffer'];
+                    $booking->rate_buffer_amount = $priceCalculation['buffer_amount'];
+                    $booking->surge_rate = $priceCalculation['surge_rate'];
+                    $booking->surge_rate_amount = $priceCalculation['surge_rate_amount'];
+                    $booking->cancellation_fee = $priceCalculation['cancellation_fee'];
                     $booking->total_price = $priceCalculation['total_price'];
                     $booking->final_price = $priceCalculation['total_price'];
                     $latestPriceCalculation = $priceCalculation;
@@ -537,9 +558,14 @@ class BookingController extends Controller
         $extrasPrice = (float) $data['extras_price'];
         $taxRate = (float) $data['tax_rate'];
         $rateBuffer = (float) $data['rate_buffer'];
-        $gratuity = (float) $data['gratuity'];
+        $gratuityPercentage = (float) $data['gratuity_percentage'];
+        $surgeRate = (float) $data['surge_rate'];
+        $configuredCancellationFee = (float) $data['cancellation_fee'];
+        $status = (string) ($data['status'] ?? '');
         $parking = (float) $data['parking'];
         $others = (float) $data['others'];
+        $airportFees = (float) $data['airport_fees'];
+        $congestionCharge = (float) $data['congestion_charge'];
 
         $rate = 0;
         $units = 0;
@@ -561,9 +587,12 @@ class BookingController extends Controller
                 break;
         }
 
-        $subtotal = $basePrice + ($units * $rate) + $extrasPrice + $gratuity + $parking + $others;
-        $taxes = $subtotal * ($taxRate / 100);
-        $preAuthBase = $subtotal + $taxes;
+        $cancellationFee = $status === 'cancelled' ? $configuredCancellationFee : 0;
+        $subtotal = $basePrice + ($units * $rate) + $extrasPrice + $parking + $others + $airportFees + $congestionCharge;
+        $surgeAmount = $subtotal * ($surgeRate / 100);
+        $taxesAmount = ($subtotal + $surgeAmount) * ($taxRate / 100);
+        $gratuityAmount = ($subtotal + $surgeAmount) * ($gratuityPercentage / 100);
+        $preAuthBase = $subtotal + $surgeAmount + $taxesAmount + $gratuityAmount + $cancellationFee;
         $bufferAmount = $preAuthBase * ($rateBuffer / 100);
         $total = $preAuthBase + $bufferAmount;
 
@@ -577,11 +606,17 @@ class BookingController extends Controller
             'extras_price' => $extrasPrice,
             'tax_rate' => $taxRate,
             'rate_buffer' => $rateBuffer,
+            'gratuity_percentage' => $gratuityPercentage,
+            'surge_rate' => $surgeRate,
+            'cancellation_fee' => $cancellationFee,
             'subtotal' => $subtotal,
-            'taxes' => $taxes,
-            'gratuity' => $gratuity,
+            'surge_rate_amount' => $surgeAmount,
+            'taxes_amount' => $taxesAmount,
+            'gratuity_amount' => $gratuityAmount,
             'parking' => $parking,
             'others' => $others,
+            'airport_fees' => $airportFees,
+            'congestion_charge' => $congestionCharge,
             'buffer_amount' => $bufferAmount,
             'total_price' => $total,
         ];
@@ -597,9 +632,14 @@ class BookingController extends Controller
             'extras_price' => (float) ($data->extras_price ?? 0),
             'tax_rate' => (float) ($config->tax_rate ?? 0),
             'rate_buffer' => (float) ($config->rate_buffer ?? 0),
-            'gratuity' => (float) ($data->gratuity ?? 0),
+            'gratuity_percentage' => (float) ($config->gratuity_percentage ?? 0),
+            'surge_rate' => (float) ($config->surge_rate ?? 0),
+            'cancellation_fee' => (float) ($config->cancellation_fee ?? 0),
+            'status' => (string) ($data->status ?? ''),
             'parking' => (float) ($data->parking ?? 0),
             'others' => (float) ($data->others ?? 0),
+            'airport_fees' => (float) ($data->airport_fees ?? 0),
+            'congestion_charge' => (float) ($data->congestion_charge ?? 0),
         ];
     }
 
@@ -620,14 +660,20 @@ class BookingController extends Controller
             $billedField => $billedValue,
             'base_price' => $priceCalculation['base_price'],
             'extras_price' => $priceCalculation['extras_price'],
-            'gratuity' => $priceCalculation['gratuity'],
+            'airport_fees' => $priceCalculation['airport_fees'],
+            'congestion_charge' => $priceCalculation['congestion_charge'],
             'parking' => $priceCalculation['parking'],
             'others' => $priceCalculation['others'],
             'subtotal' => $priceCalculation['subtotal'],
+            'surge_rate_percent' => $priceCalculation['surge_rate'],
+            'surge_rate_amount' => $priceCalculation['surge_rate_amount'],
             'tax_rate_percent' => $priceCalculation['tax_rate'],
-            'tax_amount' => $priceCalculation['taxes'],
+            'tax_amount' => $priceCalculation['taxes_amount'],
+            'gratuity_percent' => $priceCalculation['gratuity_percentage'],
+            'gratuity_amount' => $priceCalculation['gratuity_amount'],
             'rate_buffer_percent' => $priceCalculation['rate_buffer'],
             'rate_buffer_amount' => $priceCalculation['buffer_amount'],
+            'cancellation_fee' => $priceCalculation['cancellation_fee'],
             'total_price' => $priceCalculation['total_price'],
         ];
     }

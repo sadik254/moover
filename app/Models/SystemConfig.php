@@ -18,6 +18,7 @@ class SystemConfig extends Model
         'surge_rate',
         'wait_time_rate',
         'rate_buffer',
+        'gratuity_percentage',
         'currency',
         'service_zones',
         'platform_name',

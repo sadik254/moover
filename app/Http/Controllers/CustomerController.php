@@ -148,6 +148,7 @@ class CustomerController extends Controller
         return response()->json([
             'token' => $token,
             'customer_id' => $customer->id,
+            'customer' => $this->customerLoginPayload($customer),
             'message' => 'Login successful',
         ], 200);
     }
@@ -331,5 +332,20 @@ class CustomerController extends Controller
             'message' => 'Profile updated successfully',
             'data' => $customer
         ], 200);
+    }
+
+    private function customerLoginPayload(Customer $customer): array
+    {
+        return [
+            'id' => $customer->id,
+            'name' => $customer->name,
+            'email' => $customer->email,
+            'phone' => $customer->phone,
+            'customer_company' => $customer->customer_company,
+            'customer_type' => $customer->customer_type,
+            // 'preferred_service_level' => $customer->preferred_service_level,
+            // 'created_at' => $customer->created_at,
+            // 'updated_at' => $customer->updated_at,
+        ];
     }
 }
