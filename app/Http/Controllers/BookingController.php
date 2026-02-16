@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Booking;
+use App\Models\BookingPayment;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\SystemConfig;
@@ -14,6 +15,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Stripe\Exception\ApiErrorException;
+use Stripe\PaymentIntent;
+use Stripe\Stripe;
 
 class BookingController extends Controller
 {
@@ -447,7 +451,36 @@ class BookingController extends Controller
                     ]));
                 }
 
-                $recalc = $request->hasAny([
+                $latestPriceCalculation = null;
+                $isCancelled = (string) $booking->status === 'cancelled';
+
+                if ($isCancelled) {
+                    $systemConfig = $this->getSystemConfig($booking->company_id);
+                    $latestPriceCalculation = $this->buildCancellationPriceCalculation(
+                        cancellationFee: (float) ($systemConfig->cancellation_fee ?? 0),
+                        serviceType: (string) ($booking->service_type ?? 'custom')
+                    );
+
+                    $booking->base_price = 0;
+                    $booking->extras_price = 0;
+                    $booking->parking = 0;
+                    $booking->others = 0;
+                    $booking->airport_fees = 0;
+                    $booking->congestion_charge = 0;
+                    $booking->taxes = 0;
+                    $booking->taxes_amount = 0;
+                    $booking->gratuity = 0;
+                    $booking->gratuity_amount = 0;
+                    $booking->rate_buffer = 0;
+                    $booking->rate_buffer_amount = 0;
+                    $booking->surge_rate = 0;
+                    $booking->surge_rate_amount = 0;
+                    $booking->cancellation_fee = $latestPriceCalculation['cancellation_fee'];
+                    $booking->total_price = $latestPriceCalculation['total_price'];
+                    $booking->final_price = $latestPriceCalculation['total_price'];
+                }
+
+                $recalc = ! $isCancelled && $request->hasAny([
                     'vehicle_id',
                     'service_type',
                     'distance_km',
@@ -456,10 +489,10 @@ class BookingController extends Controller
                     'parking',
                     'others',
                     'airport_fees',
-                    'congestion_charge'
+                    'congestion_charge',
+                    'status',
                 ]);
 
-                $latestPriceCalculation = null;
                 if ($recalc) {
                     $vehicle = Vehicle::find($booking->vehicle_id);
                     $systemConfig = $this->getSystemConfig($booking->company_id);
@@ -494,12 +527,23 @@ class BookingController extends Controller
 
             $freshBooking = $booking->fresh();
             $calc = $booking->getAttribute('price_calculation');
+            $cancellationPayment = null;
 
-            return response()->json([
+            if ((string) $freshBooking->status === 'cancelled') {
+                $cancellationPayment = $this->captureCancellationPayment($freshBooking);
+            }
+
+            $response = [
                 'message' => 'Booking updated successfully',
                 'data' => $freshBooking,
                 'calculation' => $this->buildCalculationBreakdown($calc),
-            ]);
+            ];
+
+            if ($cancellationPayment) {
+                $response['cancellation_payment'] = $cancellationPayment;
+            }
+
+            return response()->json($response);
 
         } catch (\Exception $e) {
             return response()->json([
@@ -711,5 +755,105 @@ class BookingController extends Controller
             'cancellation_fee' => $priceCalculation['cancellation_fee'],
             'total_price' => $priceCalculation['total_price'],
         ];
+    }
+
+    private function buildCancellationPriceCalculation(float $cancellationFee, string $serviceType): array
+    {
+        return [
+            'service_type' => $serviceType,
+            'rate' => 0,
+            'units' => 0,
+            'base_price' => 0,
+            'distance_km' => 0,
+            'hours' => 0,
+            'extras_price' => 0,
+            'tax_rate' => 0,
+            'rate_buffer' => 0,
+            'gratuity_percentage' => 0,
+            'surge_rate' => 0,
+            'cancellation_fee' => $cancellationFee,
+            'subtotal' => 0,
+            'surge_rate_amount' => 0,
+            'taxes_amount' => 0,
+            'gratuity_amount' => 0,
+            'parking' => 0,
+            'others' => 0,
+            'airport_fees' => 0,
+            'congestion_charge' => 0,
+            'buffer_amount' => 0,
+            'total_price' => $cancellationFee,
+        ];
+    }
+
+    private function captureCancellationPayment(Booking $booking): ?array
+    {
+        $latestPayment = BookingPayment::where('booking_id', $booking->id)
+            ->latest()
+            ->first();
+
+        if (! $latestPayment) {
+            return [
+                'status' => 'skipped',
+                'message' => 'No payment authorization found for cancellation capture.',
+            ];
+        }
+
+        if ($latestPayment->status !== 'requires_capture') {
+            return [
+                'status' => 'skipped',
+                'message' => 'Latest payment is not capturable.',
+                'payment_status' => $latestPayment->status,
+            ];
+        }
+
+        $finalAmount = (float) ($booking->final_price ?? 0);
+        if ($finalAmount <= 0) {
+            return [
+                'status' => 'skipped',
+                'message' => 'Cancellation fee is 0, capture was not attempted.',
+            ];
+        }
+
+        if ($finalAmount > (float) $latestPayment->authorized_amount) {
+            return [
+                'status' => 'failed',
+                'message' => 'Cancellation fee exceeds authorized amount.',
+            ];
+        }
+
+        try {
+            Stripe::setApiKey((string) config('services.stripe.secret_key'));
+            $intent = PaymentIntent::retrieve($latestPayment->payment_intent_id);
+            $capturedIntent = $intent->capture([
+                'amount_to_capture' => (int) round($finalAmount * 100),
+            ]);
+
+            $latestPayment->captured_amount = $finalAmount;
+            $latestPayment->amount_to_capture = $finalAmount;
+            $latestPayment->status = $capturedIntent->status;
+            $latestPayment->raw_payload = $capturedIntent->toArray();
+            $latestPayment->save();
+
+            $booking->payment_status = $capturedIntent->status === 'succeeded' ? 'paid' : $capturedIntent->status;
+            $booking->save();
+
+            return [
+                'status' => 'captured',
+                'captured_amount' => $finalAmount,
+                'payment_status' => $latestPayment->status,
+            ];
+        } catch (ApiErrorException $e) {
+            $latestPayment->failure_message = $e->getMessage();
+            $latestPayment->status = 'failed';
+            $latestPayment->save();
+
+            $booking->payment_status = 'failed';
+            $booking->save();
+
+            return [
+                'status' => 'failed',
+                'message' => $e->getMessage(),
+            ];
+        }
     }
 }

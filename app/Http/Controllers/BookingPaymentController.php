@@ -10,6 +10,7 @@ use App\Models\SystemConfig;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Exception\SignatureVerificationException;
 use Stripe\PaymentIntent;
@@ -209,9 +210,23 @@ class BookingPaymentController extends Controller
                 ],
             ], 201);
         } catch (ApiErrorException $e) {
+            $payment = $this->recordFailedAuthorization(
+                booking: $booking,
+                currency: $currency,
+                estimatedAmount: $estimatedAmount,
+                authorizedAmount: $authorizedAmount,
+                error: $e,
+                paymentMethodId: (string) $request->payment_method_id
+            );
+
+            $booking->payment_method = 'stripe';
+            $booking->payment_status = 'failed';
+            $booking->save();
+
             return response()->json([
                 'message' => 'Stripe authorization failed',
                 'error' => $e->getMessage(),
+                'payment' => $payment,
             ], 422);
         }
     }
@@ -302,5 +317,32 @@ class BookingPaymentController extends Controller
         }
 
         return false;
+    }
+
+    private function recordFailedAuthorization(
+        Booking $booking,
+        string $currency,
+        float $estimatedAmount,
+        float $authorizedAmount,
+        ApiErrorException $error,
+        ?string $paymentMethodId = null
+    ): BookingPayment {
+        $errorBody = method_exists($error, 'getJsonBody') ? $error->getJsonBody() : null;
+        $paymentIntentId = data_get($errorBody, 'error.payment_intent.id');
+
+        return BookingPayment::create([
+            'booking_id' => $booking->id,
+            'customer_id' => $booking->customer_id,
+            'provider' => 'stripe',
+            'currency' => $currency,
+            'payment_intent_id' => $paymentIntentId ?: 'failed_' . Str::uuid()->toString(),
+            'payment_method_id' => $paymentMethodId,
+            'estimated_amount' => $estimatedAmount,
+            'authorized_amount' => $authorizedAmount,
+            'status' => 'failed',
+            'failure_code' => data_get($errorBody, 'error.code'),
+            'failure_message' => $error->getMessage(),
+            'raw_payload' => $errorBody ?: ['message' => $error->getMessage()],
+        ]);
     }
 }
