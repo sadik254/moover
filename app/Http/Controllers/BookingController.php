@@ -62,6 +62,47 @@ class BookingController extends Controller
         return response()->json(['data' => $bookings]);
     }
 
+    public function customerBookings(Request $request)
+    {
+        $authUser = $request->user();
+
+        if (! $authUser instanceof Customer) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $company = $this->getCompany();
+        if (! $company) {
+            return response()->json(['message' => 'Company not found'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'status' => ['sometimes', 'nullable', Rule::in(['pending', 'confirmed', 'assigned', 'on_route', 'completed', 'cancelled'])],
+            'per_page' => 'sometimes|integer|min:1|max:100',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $query = Booking::where('company_id', $company->id)
+            ->where('customer_id', $authUser->id);
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $perPage = (int) $request->input('per_page', 15);
+        $bookings = $query
+            ->orderByDesc('id')
+            ->paginate($perPage)
+            ->withQueryString();
+
+        return response()->json(['data' => $bookings]);
+    }
+
     public function store(Request $request)
     {
         $company = $this->getCompany();

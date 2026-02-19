@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\Mail\UserRegisteredMail;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -68,6 +71,16 @@ class UserController extends Controller
 
         // Extract the token part after the '|'
         $token = explode('|', $plainTextToken)[1];
+
+        try {
+            Mail::to($user->email)->send(new UserRegisteredMail($user));
+        } catch (\Throwable $e) {
+            Log::warning('User registration mail failed', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return response()->json([
             'token' => $token, 
