@@ -21,6 +21,8 @@ class Customer extends Authenticatable
         'password',
         'email_verification_code',
         'email_verified_at',
+        'password_reset_code',
+        'password_reset_code_sent_at',
         'dispatch_note',
         'preferred_service_level',
     ];
@@ -28,6 +30,7 @@ class Customer extends Authenticatable
     protected $hidden = [
         'password',
         'email_verification_code',
+        'password_reset_code',
     ];
 
     protected function casts(): array
@@ -35,6 +38,7 @@ class Customer extends Authenticatable
         return [
             'password' => 'hashed',
             'email_verified_at' => 'datetime',
+            'password_reset_code_sent_at' => 'datetime',
         ];
     }
 

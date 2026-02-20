@@ -67,6 +67,8 @@ Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->delete('drive
 Route::post('customer/register', [CustomerController::class, 'register']);
 Route::post('customer/verify-registration-code', [CustomerController::class, 'verifyRegistrationCode']);
 Route::post('customer/resend-verification-code', [CustomerController::class, 'resendVerificationCode']);
+Route::post('customer/request-reset-password-code', [CustomerController::class, 'requestPasswordResetCode']);
+Route::post('customer/reset-password-with-code', [CustomerController::class, 'resetPasswordWithCode']);
 Route::post('customer/login', [CustomerController::class, 'login']);
 Route::middleware(['auth:sanctum', 'abilities:customer'])->post('customer/logout', [CustomerController::class, 'logout']);
 Route::middleware(['auth:sanctum', 'abilities:customer'])->post('customer/self-update', [CustomerController::class, 'selfUpdate']);

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Mail\CustomerCreatedPasswordMail;
+use App\Mail\CustomerPasswordResetCodeMail;
 use App\Mail\CustomerVerificationCodeMail;
 use App\Models\Company;
 use App\Models\Customer;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Carbon\Carbon;
 
 class CustomerController extends Controller
 {
@@ -249,6 +251,94 @@ class CustomerController extends Controller
         ], 200);
     }
 
+    public function requestPasswordResetCode(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors'  => $validator->errors()
+            ], 422);
+        }
+
+        $customer = Customer::where('email', $request->email)->first();
+
+        if (! $customer) {
+            return response()->json([
+                'message' => 'Customer not found'
+            ], 404);
+        }
+
+        $customer->password_reset_code = $this->generateVerificationCode();
+        $customer->password_reset_code_sent_at = now();
+        $customer->save();
+
+        $this->sendPasswordResetCodeEmail($customer);
+
+        return response()->json([
+            'message' => 'Password reset code sent successfully',
+        ], 200);
+    }
+
+    public function resetPasswordWithCode(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email|max:255',
+            'reset_code' => 'required|string|size:6',
+            'new_password' => 'required|min:6|confirmed',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors'  => $validator->errors()
+            ], 422);
+        }
+
+        $customer = Customer::where('email', $request->email)->first();
+
+        if (! $customer) {
+            return response()->json([
+                'message' => 'Customer not found'
+            ], 404);
+        }
+
+        if (! $customer->password_reset_code || ! $customer->password_reset_code_sent_at) {
+            return response()->json([
+                'message' => 'No active reset request found'
+            ], 422);
+        }
+
+        if ((string) $customer->password_reset_code !== (string) $request->reset_code) {
+            return response()->json([
+                'message' => 'Invalid reset code'
+            ], 422);
+        }
+
+        $expiresAt = Carbon::parse($customer->password_reset_code_sent_at)->addMinutes(15);
+        if (now()->gt($expiresAt)) {
+            $customer->password_reset_code = null;
+            $customer->password_reset_code_sent_at = null;
+            $customer->save();
+
+            return response()->json([
+                'message' => 'Reset code expired. Please request a new code.'
+            ], 422);
+        }
+
+        $customer->password = Hash::make($request->new_password);
+        $customer->password_reset_code = null;
+        $customer->password_reset_code_sent_at = null;
+        $customer->save();
+
+        return response()->json([
+            'message' => 'Password reset successfully',
+        ], 200);
+    }
+
     public function show(Request $request, $id)
     {
         $company = Company::first();
@@ -475,6 +565,22 @@ class CustomerController extends Controller
             ));
         } catch (\Throwable $e) {
             Log::warning('Customer credentials mail failed', [
+                'customer_id' => $customer->id,
+                'email' => $customer->email,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function sendPasswordResetCodeEmail(Customer $customer): void
+    {
+        try {
+            Mail::to($customer->email)->send(new CustomerPasswordResetCodeMail(
+                customer: $customer,
+                resetCode: (string) $customer->password_reset_code
+            ));
+        } catch (\Throwable $e) {
+            Log::warning('Customer password reset mail failed', [
                 'customer_id' => $customer->id,
                 'email' => $customer->email,
                 'error' => $e->getMessage(),
