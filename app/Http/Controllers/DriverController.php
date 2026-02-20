@@ -2,10 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\DriverCreatedPasswordMail;
 use App\Models\Company;
 use App\Models\Driver;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Uploadcare\Api;
 use Uploadcare\Configuration;
@@ -46,6 +51,7 @@ class DriverController extends Controller
                     ->where('company_id', $company->id),
             ],
             'name'             => 'required|string|max:255',
+            'email'            => 'required|email|max:255|unique:drivers,email',
             'phone'            => 'required|string|max:255',
             'license_number'   => 'required|string|max:255',
             'license_expiry'   => 'nullable|date',
@@ -66,9 +72,12 @@ class DriverController extends Controller
             ], 422);
         }
 
+        $generatedPassword = Str::upper(Str::random(6));
+
         $data = $request->only([
             'vehicle_id',
             'name',
+            'email',
             'phone',
             'license_number',
             'license_expiry',
@@ -79,6 +88,7 @@ class DriverController extends Controller
             'available',
         ]);
         $data['company_id'] = $company->id;
+        $data['password'] = Hash::make($generatedPassword);
 
         if ($request->hasFile('license_front')) {
             $configuration = Configuration::create(
@@ -123,11 +133,78 @@ class DriverController extends Controller
         }
 
         $driver = Driver::create($data);
+        $this->sendDriverCredentialsEmail($driver, $generatedPassword);
 
         return response()->json([
             'message' => 'Driver created successfully',
             'data'    => $driver
         ], 201);
+    }
+
+    public function login(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|min:6',
+        ]);
+
+        $driver = Driver::where('email', $request->email)->first();
+
+        if (! $driver || ! Hash::check($request->password, (string) $driver->password)) {
+            return response()->json(['message' => 'Invalid credentials'], 401);
+        }
+
+        $plainTextToken = $driver->createToken('DriverLogin', ['driver'])->plainTextToken;
+        $token = explode('|', $plainTextToken)[1];
+
+        return response()->json([
+            'token' => $token,
+            'driver_id' => $driver->id,
+            'driver' => [
+                'id' => $driver->id,
+                'name' => $driver->name,
+                'email' => $driver->email,
+                'phone' => $driver->phone,
+                'status' => $driver->status,
+            ],
+            'message' => 'Login successful',
+        ], 200);
+    }
+
+    public function me(Request $request)
+    {
+        $driver = $request->user();
+
+        if (! $driver instanceof Driver) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        return response()->json([
+            'data' => [
+                'id' => $driver->id,
+                'name' => $driver->name,
+                'email' => $driver->email,
+                'phone' => $driver->phone,
+                'status' => $driver->status,
+                'employment_type' => $driver->employment_type,
+                'license_expiry' => $driver->license_expiry,
+                'address' => $driver->address,
+                'photo' => $driver->photo,
+            ],
+        ]);
+    }
+
+    public function logout(Request $request)
+    {
+        $driver = $request->user();
+
+        if (! $driver instanceof Driver) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $driver->currentAccessToken()?->delete();
+
+        return response()->json(['message' => 'Logged out successfully'], 200);
     }
 
     public function show(Request $request, $id)
@@ -183,6 +260,13 @@ class DriverController extends Controller
                     ->where('company_id', $company->id),
             ],
             'name'             => 'sometimes|required|string|max:255',
+            'email'            => [
+                'sometimes',
+                'required',
+                'email',
+                'max:255',
+                Rule::unique('drivers', 'email')->ignore($driver->id),
+            ],
             'phone'            => 'sometimes|required|string|max:255',
             'license_number'   => 'sometimes|required|string|max:255',
             'license_expiry'   => 'sometimes|nullable|date',
@@ -249,6 +333,7 @@ class DriverController extends Controller
             $request->only([
                 'vehicle_id',
                 'name',
+                'email',
                 'phone',
                 'license_number',
                 'license_expiry',
@@ -293,5 +378,21 @@ class DriverController extends Controller
         return response()->json([
             'message' => 'Driver deleted successfully'
         ], 200);
+    }
+
+    private function sendDriverCredentialsEmail(Driver $driver, string $generatedPassword): void
+    {
+        try {
+            Mail::to($driver->email)->send(new DriverCreatedPasswordMail(
+                driver: $driver,
+                generatedPassword: $generatedPassword
+            ));
+        } catch (\Throwable $e) {
+            Log::warning('Driver credentials mail failed', [
+                'driver_id' => $driver->id,
+                'email' => $driver->email,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

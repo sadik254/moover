@@ -63,6 +63,11 @@ Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('drivers/
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('drivers/update/{id}', [DriverController::class, 'update']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->delete('drivers/{id}', [DriverController::class, 'destroy']);
 
+// Driver auth routes (abilities-based)
+Route::post('driver/login', [DriverController::class, 'login']);
+Route::middleware(['auth:sanctum', 'abilities:driver'])->get('driver/me', [DriverController::class, 'me']);
+Route::middleware(['auth:sanctum', 'abilities:driver'])->post('driver/logout', [DriverController::class, 'logout']);
+
 // Customer auth routes (abilities-based)
 Route::post('customer/register', [CustomerController::class, 'register']);
 Route::post('customer/verify-registration-code', [CustomerController::class, 'verifyRegistrationCode']);
