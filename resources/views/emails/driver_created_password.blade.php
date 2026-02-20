@@ -15,7 +15,7 @@
                             @if (!empty($companyLogo))
                                 <img src="{{ $companyLogo }}" alt="{{ $platformName }} logo" style="max-height:44px;display:block;margin-bottom:12px;">
                             @endif
-                            <div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;opacity:.85;">Driver Account</div>
+                            <div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;opacity:.85;">{{ $platformName}}Driver Account</div>
                             <div style="font-size:28px;font-weight:700;line-height:1.3;">Your account is ready</div>
                         </td>
                     </tr>
