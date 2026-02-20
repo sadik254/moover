@@ -65,6 +65,8 @@ Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->delete('drive
 
 // Customer auth routes (abilities-based)
 Route::post('customer/register', [CustomerController::class, 'register']);
+Route::post('customer/verify-registration-code', [CustomerController::class, 'verifyRegistrationCode']);
+Route::post('customer/resend-verification-code', [CustomerController::class, 'resendVerificationCode']);
 Route::post('customer/login', [CustomerController::class, 'login']);
 Route::middleware(['auth:sanctum', 'abilities:customer'])->post('customer/logout', [CustomerController::class, 'logout']);
 Route::middleware(['auth:sanctum', 'abilities:customer'])->post('customer/self-update', [CustomerController::class, 'selfUpdate']);

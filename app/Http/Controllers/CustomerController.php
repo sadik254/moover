@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\CustomerCreatedPasswordMail;
+use App\Mail\CustomerVerificationCodeMail;
 use App\Models\Company;
 use App\Models\Customer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -71,13 +75,15 @@ class CustomerController extends Controller
         ]);
         $data['company_id'] = $company->id;
         $data['password'] = Hash::make($generatedPassword);
+        $data['email_verified_at'] = now();
+        $data['email_verification_code'] = null;
 
         $customer = Customer::create($data);
+        $this->sendCustomerCredentialsEmail($customer, $generatedPassword);
 
         return response()->json([
-            'message' => 'Customer created successfully',
+            'message' => 'Customer created successfully and credentials sent by email.',
             'data' => $customer,
-            'generated_password' => $generatedPassword
         ], 201);
     }
 
@@ -115,16 +121,15 @@ class CustomerController extends Controller
         ]);
         $data['company_id'] = $company->id;
         $data['password'] = Hash::make($request->password);
+        $data['email_verification_code'] = $this->generateVerificationCode();
+        $data['email_verified_at'] = null;
 
         $customer = Customer::create($data);
-
-        $plainTextToken = $customer->createToken('CustomerRegistration', ['customer'])->plainTextToken;
-        $token = explode('|', $plainTextToken)[1];
+        $this->sendVerificationCodeEmail($customer);
 
         return response()->json([
-            'token' => $token,
             'customer_id' => $customer->id,
-            'message' => 'Customer registered successfully',
+            'message' => 'Customer registered successfully. Please verify your email with the code sent to your inbox.',
         ], 201);
     }
 
@@ -142,6 +147,12 @@ class CustomerController extends Controller
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
+        if (is_null($customer->email_verified_at)) {
+            return response()->json([
+                'message' => 'Email is not verified',
+            ], 403);
+        }
+
         $plainTextToken = $customer->createToken('CustomerLogin', ['customer'])->plainTextToken;
         $token = explode('|', $plainTextToken)[1];
 
@@ -150,6 +161,91 @@ class CustomerController extends Controller
             'customer_id' => $customer->id,
             'customer' => $this->customerLoginPayload($customer),
             'message' => 'Login successful',
+        ], 200);
+    }
+
+    public function verifyRegistrationCode(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email|max:255',
+            'verification_code' => 'required|string|size:6',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors'  => $validator->errors()
+            ], 422);
+        }
+
+        $customer = Customer::where('email', $request->email)->first();
+
+        if (! $customer) {
+            return response()->json([
+                'message' => 'Customer not found'
+            ], 404);
+        }
+
+        if (! is_null($customer->email_verified_at)) {
+            return response()->json([
+                'message' => 'Email already verified'
+            ], 200);
+        }
+
+        if ((string) $customer->email_verification_code !== (string) $request->verification_code) {
+            return response()->json([
+                'message' => 'Invalid verification code'
+            ], 422);
+        }
+
+        $customer->email_verified_at = now();
+        $customer->email_verification_code = null;
+        $customer->save();
+
+        $plainTextToken = $customer->createToken('CustomerRegistrationVerified', ['customer'])->plainTextToken;
+        $token = explode('|', $plainTextToken)[1];
+
+        return response()->json([
+            'message' => 'Email verified successfully',
+            'customer_id' => $customer->id,
+            'token' => $token,
+        ], 200);
+    }
+
+    public function resendVerificationCode(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors'  => $validator->errors()
+            ], 422);
+        }
+
+        $customer = Customer::where('email', $request->email)->first();
+
+        if (! $customer) {
+            return response()->json([
+                'message' => 'Customer not found'
+            ], 404);
+        }
+
+        if (! is_null($customer->email_verified_at)) {
+            return response()->json([
+                'message' => 'Email already verified'
+            ], 200);
+        }
+
+        $customer->email_verification_code = $this->generateVerificationCode();
+        $customer->save();
+
+        $this->sendVerificationCodeEmail($customer);
+
+        return response()->json([
+            'message' => 'Verification code sent successfully',
         ], 200);
     }
 
@@ -347,5 +443,42 @@ class CustomerController extends Controller
             // 'created_at' => $customer->created_at,
             // 'updated_at' => $customer->updated_at,
         ];
+    }
+
+    private function generateVerificationCode(): string
+    {
+        return str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+    }
+
+    private function sendVerificationCodeEmail(Customer $customer): void
+    {
+        try {
+            Mail::to($customer->email)->send(new CustomerVerificationCodeMail(
+                customer: $customer,
+                verificationCode: (string) $customer->email_verification_code
+            ));
+        } catch (\Throwable $e) {
+            Log::warning('Customer verification mail failed', [
+                'customer_id' => $customer->id,
+                'email' => $customer->email,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function sendCustomerCredentialsEmail(Customer $customer, string $generatedPassword): void
+    {
+        try {
+            Mail::to($customer->email)->send(new CustomerCreatedPasswordMail(
+                customer: $customer,
+                generatedPassword: $generatedPassword
+            ));
+        } catch (\Throwable $e) {
+            Log::warning('Customer credentials mail failed', [
+                'customer_id' => $customer->id,
+                'email' => $customer->email,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

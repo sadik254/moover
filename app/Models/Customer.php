@@ -19,18 +19,22 @@ class Customer extends Authenticatable
         'email',
         'phone',
         'password',
+        'email_verification_code',
+        'email_verified_at',
         'dispatch_note',
         'preferred_service_level',
     ];
 
     protected $hidden = [
         'password',
+        'email_verification_code',
     ];
 
     protected function casts(): array
     {
         return [
             'password' => 'hashed',
+            'email_verified_at' => 'datetime',
         ];
     }
 
