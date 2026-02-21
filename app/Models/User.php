@@ -53,4 +53,9 @@ class User extends Authenticatable
         return $this->hasOne(Company::class);
     }
 
+    public function bookingActivities()
+    {
+        return $this->hasMany(BookingActivity::class, 'admin_user_id');
+    }
+
 }

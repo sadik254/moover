@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Booking;
+use App\Models\BookingActivity;
 use App\Models\BookingPayment;
 use App\Models\Company;
 use App\Models\Customer;
@@ -183,6 +184,61 @@ class BookingController extends Controller
                 'drivers_available_for_dispatch' => $driversAvailable,
                 'earnings_today' => round((float) $earningsToday, 2),
             ],
+        ]);
+    }
+
+    public function recentActivity(Request $request)
+    {
+        $user = $request->user();
+        if (! $user instanceof User) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $company = $this->getCompany();
+        if (! $company) {
+            return response()->json(['message' => 'Company not found'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'booking_id' => ['sometimes', 'nullable', Rule::exists('bookings', 'id')],
+            'action' => 'sometimes|nullable|string|max:100',
+            'admin_user_id' => ['sometimes', 'nullable', Rule::exists('users', 'id')],
+            'per_page' => 'sometimes|integer|min:1|max:100',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $query = BookingActivity::with([
+                'adminUser:id,name,email,user_type',
+                'booking:id,status,pickup_time,dropoff_time,total_price,final_price',
+            ])
+            ->where('company_id', $company->id);
+
+        if ($request->filled('booking_id')) {
+            $query->where('booking_id', $request->booking_id);
+        }
+
+        if ($request->filled('action')) {
+            $query->where('action', $request->action);
+        }
+
+        if ($request->filled('admin_user_id')) {
+            $query->where('admin_user_id', $request->admin_user_id);
+        }
+
+        $perPage = (int) $request->input('per_page', 20);
+        $activities = $query
+            ->orderByDesc('id')
+            ->paginate($perPage)
+            ->withQueryString();
+
+        return response()->json([
+            'data' => $activities,
         ]);
     }
 
@@ -482,6 +538,23 @@ class BookingController extends Controller
                 $response['booking_access_token'] = $issuedBookingAccessToken;
             }
 
+            $this->logBookingActivity(
+                request: $request,
+                booking: $freshBooking,
+                action: 'booking_created',
+                description: 'Booking created by admin/dispatcher',
+                oldValues: null,
+                newValues: [
+                    'status' => $freshBooking->status,
+                    'customer_id' => $freshBooking->customer_id,
+                    'vehicle_id' => $freshBooking->vehicle_id,
+                    'driver_id' => $freshBooking->driver_id,
+                    'pickup_time' => $freshBooking->pickup_time,
+                    'total_price' => $freshBooking->total_price,
+                    'final_price' => $freshBooking->final_price,
+                ]
+            );
+
             return response()->json($response, 201);
 
         } catch (\Exception $e) {
@@ -538,6 +611,36 @@ class BookingController extends Controller
         if (! $booking) {
             return response()->json(['message' => 'Booking not found'], 404);
         }
+
+        $beforeSnapshot = $booking->only([
+            'status',
+            'customer_id',
+            'vehicle_id',
+            'driver_id',
+            'service_type',
+            'pickup_address',
+            'dropoff_address',
+            'pickup_time',
+            'dropoff_time',
+            'distance_km',
+            'hours',
+            'base_price',
+            'extras_price',
+            'taxes',
+            'taxes_amount',
+            'gratuity',
+            'gratuity_amount',
+            'rate_buffer',
+            'rate_buffer_amount',
+            'surge_rate',
+            'surge_rate_amount',
+            'cancellation_fee',
+            'total_price',
+            'final_price',
+            'payment_method',
+            'payment_status',
+            'notes',
+        ]);
 
         $validator = Validator::make($request->all(), [
             'customer_id'     => ['sometimes', 'nullable', Rule::exists('customers', 'id')],
@@ -754,6 +857,26 @@ class BookingController extends Controller
                 $response['cancellation_payment'] = $cancellationPayment;
             }
 
+            $afterSnapshot = $freshBooking->only(array_keys($beforeSnapshot));
+            [$oldValues, $newValues] = $this->diffValues($beforeSnapshot, $afterSnapshot);
+
+            $statusWasChanged = array_key_exists('status', $newValues);
+            $action = $statusWasChanged && (string) ($newValues['status'] ?? '') === 'cancelled'
+                ? 'booking_cancelled'
+                : ($statusWasChanged ? 'status_changed' : 'booking_updated');
+            $description = $statusWasChanged
+                ? 'Booking status updated by admin/dispatcher'
+                : 'Booking updated by admin/dispatcher';
+
+            $this->logBookingActivity(
+                request: $request,
+                booking: $freshBooking,
+                action: $action,
+                description: $description,
+                oldValues: $oldValues,
+                newValues: $newValues
+            );
+
             return response()->json($response);
 
         } catch (\Exception $e) {
@@ -785,6 +908,27 @@ class BookingController extends Controller
         if (! $booking) {
             return response()->json(['message' => 'Booking not found'], 404);
         }
+
+        $oldValues = $booking->only([
+            'status',
+            'customer_id',
+            'vehicle_id',
+            'driver_id',
+            'pickup_time',
+            'dropoff_time',
+            'total_price',
+            'final_price',
+            'payment_status',
+        ]);
+
+        $this->logBookingActivity(
+            request: $request,
+            booking: $booking,
+            action: 'booking_deleted',
+            description: 'Booking deleted by admin/dispatcher',
+            oldValues: $oldValues,
+            newValues: null
+        );
 
         $booking->delete();
 
@@ -975,6 +1119,52 @@ class BookingController extends Controller
         }
 
         return round((($today - $yesterday) / $yesterday) * 100, 2);
+    }
+
+    private function diffValues(array $before, array $after): array
+    {
+        $oldValues = [];
+        $newValues = [];
+
+        foreach ($after as $key => $afterValue) {
+            $beforeValue = $before[$key] ?? null;
+
+            if ($beforeValue != $afterValue) {
+                $oldValues[$key] = $beforeValue;
+                $newValues[$key] = $afterValue;
+            }
+        }
+
+        return [$oldValues, $newValues];
+    }
+
+    private function logBookingActivity(
+        Request $request,
+        Booking $booking,
+        string $action,
+        string $description,
+        ?array $oldValues = null,
+        ?array $newValues = null
+    ): void {
+        $actor = $request->user();
+
+        if (! $actor instanceof User || ! in_array((string) $actor->user_type, ['admin', 'dispatcher'], true)) {
+            return;
+        }
+
+        BookingActivity::create([
+            'company_id' => $booking->company_id,
+            'booking_id' => $booking->id,
+            'admin_user_id' => $actor->id,
+            'action' => $action,
+            'description' => $description,
+            'old_values' => $oldValues ?: null,
+            'new_values' => $newValues ?: null,
+            'meta' => [
+                'ip' => $request->ip(),
+                'user_agent' => (string) $request->userAgent(),
+            ],
+        ]);
     }
 
     private function buildCancellationPriceCalculation(float $cancellationFee, string $serviceType): array

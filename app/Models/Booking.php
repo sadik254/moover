@@ -9,6 +9,7 @@ use App\Models\Customer;
 use App\Models\Driver;
 use App\Models\Vehicle;
 use App\Models\BookingPayment;
+use App\Models\BookingActivity;
 
 class Booking extends Model
 {
@@ -90,5 +91,10 @@ class Booking extends Model
     public function latestPayment()
     {
         return $this->hasOne(BookingPayment::class)->latestOfMany();
+    }
+
+    public function activities()
+    {
+        return $this->hasMany(BookingActivity::class);
     }
 }
