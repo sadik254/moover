@@ -6,6 +6,7 @@ use App\Models\Booking;
 use App\Models\BookingPayment;
 use App\Models\Company;
 use App\Models\Customer;
+use App\Models\Driver;
 use App\Models\SystemConfig;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -101,6 +102,88 @@ class BookingController extends Controller
             ->withQueryString();
 
         return response()->json(['data' => $bookings]);
+    }
+
+    public function dashboardSummary(Request $request)
+    {
+        $user = $request->user();
+        if (! $user instanceof User) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $company = $this->getCompany();
+        if (! $company) {
+            return response()->json(['message' => 'Company not found'], 404);
+        }
+
+        $todayStart = now()->startOfDay();
+        $todayEnd = now()->endOfDay();
+        $yesterdayStart = now()->subDay()->startOfDay();
+        $yesterdayEnd = now()->subDay()->endOfDay();
+
+        $baseQuery = Booking::where('company_id', $company->id);
+
+        $todayPending = (clone $baseQuery)
+            ->where('status', 'pending')
+            ->whereBetween('pickup_time', [$todayStart, $todayEnd])
+            ->count();
+
+        $todayConfirmed = (clone $baseQuery)
+            ->where('status', 'confirmed')
+            ->whereBetween('pickup_time', [$todayStart, $todayEnd])
+            ->count();
+
+        $todayInProgress = (clone $baseQuery)
+            ->whereIn('status', ['assigned', 'on_route', 'in_progress'])
+            ->whereBetween('pickup_time', [$todayStart, $todayEnd])
+            ->count();
+        $todayTotalTracked = $todayPending + $todayConfirmed + $todayInProgress;
+
+        $yesterdayPending = (clone $baseQuery)
+            ->where('status', 'pending')
+            ->whereBetween('pickup_time', [$yesterdayStart, $yesterdayEnd])
+            ->count();
+
+        $yesterdayConfirmed = (clone $baseQuery)
+            ->where('status', 'confirmed')
+            ->whereBetween('pickup_time', [$yesterdayStart, $yesterdayEnd])
+            ->count();
+
+        $yesterdayInProgress = (clone $baseQuery)
+            ->whereIn('status', ['assigned', 'on_route', 'in_progress'])
+            ->whereBetween('pickup_time', [$yesterdayStart, $yesterdayEnd])
+            ->count();
+        $yesterdayTotalTracked = $yesterdayPending + $yesterdayConfirmed + $yesterdayInProgress;
+
+        $totalTripsLifetime = (clone $baseQuery)
+            ->whereIn('status', ['confirmed', 'completed'])
+            ->count();
+
+        $driversAvailable = Driver::where('company_id', $company->id)
+            ->where('available', true)
+            ->count();
+
+        $earningsToday = (clone $baseQuery)
+            ->where('status', 'completed')
+            ->where('payment_status', 'paid')
+            ->whereBetween('updated_at', [$todayStart, $todayEnd])
+            ->sum('final_price');
+
+        return response()->json([
+            'data' => [
+                'today_counts' => [
+                    'pending' => $todayPending,
+                    'confirmed' => $todayConfirmed,
+                    'in_progress' => $todayInProgress,
+                ],
+                'comparison_vs_yesterday' => [
+                    'overall_percent' => $this->percentageChange($todayTotalTracked, $yesterdayTotalTracked),
+                ],
+                'total_trips_lifetime' => $totalTripsLifetime,
+                'drivers_available_for_dispatch' => $driversAvailable,
+                'earnings_today' => round((float) $earningsToday, 2),
+            ],
+        ]);
     }
 
     public function store(Request $request)
@@ -818,6 +901,15 @@ class BookingController extends Controller
             'cancellation_fee' => $priceCalculation['cancellation_fee'],
             'total_price' => $priceCalculation['total_price'],
         ];
+    }
+
+    private function percentageChange(int $today, int $yesterday): ?float
+    {
+        if ($yesterday === 0) {
+            return null;
+        }
+
+        return round((($today - $yesterday) / $yesterday) * 100, 2);
     }
 
     private function buildCancellationPriceCalculation(float $cancellationFee, string $serviceType): array
