@@ -186,6 +186,71 @@ class BookingController extends Controller
         ]);
     }
 
+    public function liveOperationsFeed(Request $request)
+    {
+        $user = $request->user();
+        if (! $user instanceof User) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $company = $this->getCompany();
+        if (! $company) {
+            return response()->json(['message' => 'Company not found'], 404);
+        }
+
+        $todayStart = now()->startOfDay();
+        $todayEnd = now()->endOfDay();
+
+        $feed = Booking::with([
+                'customer:id,name,email,phone',
+                'driver:id,name,phone',
+                'vehicle:id,name,capacity,image',
+            ])
+            ->where('company_id', $company->id)
+            ->whereIn('status', ['pending', 'assigned', 'on_route', 'in_progress'])
+            ->whereBetween('pickup_time', [$todayStart, $todayEnd])
+            ->orderByDesc('updated_at')
+            ->limit(5)
+            ->get();
+
+        return response()->json([
+            'data' => $feed,
+        ]);
+    }
+
+    public function vehicleAvailability(Request $request)
+    {
+        $user = $request->user();
+        if (! $user instanceof User) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $company = $this->getCompany();
+        if (! $company) {
+            return response()->json(['message' => 'Company not found'], 404);
+        }
+
+        $now = now();
+        $unavailableVehicleIds = $this->getUnavailableVehicleIds($company->id, $now, null);
+
+        $availableVehicles = Vehicle::with('vehicleClass:id,name')
+            ->whereNotIn('id', $unavailableVehicleIds)
+            ->orderBy('name')
+            ->get();
+
+        return response()->json([
+            'data' => [
+                'window' => [
+                    'center_time' => $now->toDateTimeString(),
+                    'from' => $now->copy()->subHours(2)->toDateTimeString(),
+                    'to' => $now->copy()->addHours(2)->toDateTimeString(),
+                ],
+                'count' => $availableVehicles->count(),
+                'vehicles' => $availableVehicles,
+            ],
+        ]);
+    }
+
     public function store(Request $request)
     {
         $company = $this->getCompany();

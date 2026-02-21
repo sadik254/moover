@@ -91,6 +91,8 @@ Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->delete('custo
 Route::post('bookings', [BookingController::class, 'store']); // public: quote + create
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings', [BookingController::class, 'index']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings/dashboard-summary', [BookingController::class, 'dashboardSummary']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings/live-operations-feed', [BookingController::class, 'liveOperationsFeed']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings/vehicle-availability', [BookingController::class, 'vehicleAvailability']);
 Route::middleware(['auth:sanctum', 'abilities:customer'])->get('customer/bookings', [BookingController::class, 'customerBookings']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings/{id}', [BookingController::class, 'show']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('bookings/update/{id}', [BookingController::class, 'update']);
