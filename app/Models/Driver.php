@@ -18,6 +18,8 @@ class Driver extends Authenticatable
         'email',
         'phone',
         'password',
+        'password_reset_code',
+        'password_reset_code_sent_at',
         'license_number',
         'license_expiry',
         'status',
@@ -32,12 +34,14 @@ class Driver extends Authenticatable
 
     protected $hidden = [
         'password',
+        'password_reset_code',
     ];
 
     protected function casts(): array
     {
         return [
             'password' => 'hashed',
+            'password_reset_code_sent_at' => 'datetime',
         ];
     }
 

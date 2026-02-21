@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Mail\DriverCreatedPasswordMail;
+use App\Mail\DriverPasswordResetCodeMail;
 use App\Models\Company;
 use App\Models\Driver;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -207,6 +209,82 @@ class DriverController extends Controller
         return response()->json(['message' => 'Logged out successfully'], 200);
     }
 
+    public function requestPasswordResetCode(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $driver = Driver::where('email', $request->email)->first();
+        if (! $driver) {
+            return response()->json(['message' => 'Driver not found'], 404);
+        }
+
+        $driver->password_reset_code = $this->generateResetCode();
+        $driver->password_reset_code_sent_at = now();
+        $driver->save();
+
+        $this->sendPasswordResetCodeEmail($driver);
+
+        return response()->json([
+            'message' => 'Password reset code sent successfully',
+        ], 200);
+    }
+
+    public function resetPasswordWithCode(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email|max:255',
+            'reset_code' => 'required|string|size:6',
+            'new_password' => 'required|min:6|confirmed',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $driver = Driver::where('email', $request->email)->first();
+        if (! $driver) {
+            return response()->json(['message' => 'Driver not found'], 404);
+        }
+
+        if (! $driver->password_reset_code || ! $driver->password_reset_code_sent_at) {
+            return response()->json(['message' => 'No active reset request found'], 422);
+        }
+
+        if ((string) $driver->password_reset_code !== (string) $request->reset_code) {
+            return response()->json(['message' => 'Invalid reset code'], 422);
+        }
+
+        $expiresAt = Carbon::parse($driver->password_reset_code_sent_at)->addMinutes(15);
+        if (now()->gt($expiresAt)) {
+            $driver->password_reset_code = null;
+            $driver->password_reset_code_sent_at = null;
+            $driver->save();
+
+            return response()->json(['message' => 'Reset code expired. Please request a new code.'], 422);
+        }
+
+        $driver->password = Hash::make($request->new_password);
+        $driver->password_reset_code = null;
+        $driver->password_reset_code_sent_at = null;
+        $driver->save();
+
+        return response()->json([
+            'message' => 'Password reset successfully',
+        ], 200);
+    }
+
     public function show(Request $request, $id)
     {
         $company = Company::first();
@@ -389,6 +467,27 @@ class DriverController extends Controller
             ));
         } catch (\Throwable $e) {
             Log::warning('Driver credentials mail failed', [
+                'driver_id' => $driver->id,
+                'email' => $driver->email,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function generateResetCode(): string
+    {
+        return str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+    }
+
+    private function sendPasswordResetCodeEmail(Driver $driver): void
+    {
+        try {
+            Mail::to($driver->email)->send(new DriverPasswordResetCodeMail(
+                driver: $driver,
+                resetCode: (string) $driver->password_reset_code
+            ));
+        } catch (\Throwable $e) {
+            Log::warning('Driver password reset mail failed', [
                 'driver_id' => $driver->id,
                 'email' => $driver->email,
                 'error' => $e->getMessage(),
