@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Mail\CustomerCreatedPasswordMail;
 use App\Mail\CustomerPasswordResetCodeMail;
 use App\Mail\CustomerVerificationCodeMail;
+use App\Models\Booking;
 use App\Models\Company;
 use App\Models\Customer;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -18,6 +20,126 @@ use Carbon\Carbon;
 
 class CustomerController extends Controller
 {
+    public function dashboardSummary(Request $request)
+    {
+        $user = $request->user();
+
+        if (! $user instanceof User) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $company = Company::first();
+
+        if (! $company) {
+            return response()->json([
+                'message' => 'Company not found'
+            ], 404);
+        }
+
+        $totalCustomers = Customer::where('company_id', $company->id)->count();
+
+        $corporateCustomers = Customer::where('company_id', $company->id)
+            ->where('customer_type', 'corporate')
+            ->count();
+
+        $affiliateCustomers = Customer::where('company_id', $company->id)
+            ->where('customer_type', 'affiliate')
+            ->count();
+
+        $monthStart = now()->startOfMonth();
+        $monthEnd = now()->endOfMonth();
+
+        $activeThisMonth = Booking::where('company_id', $company->id)
+            ->whereNotNull('customer_id')
+            ->whereBetween('pickup_time', [$monthStart, $monthEnd])
+            ->distinct('customer_id')
+            ->count('customer_id');
+
+        return response()->json([
+            'data' => [
+                'total_customers' => $totalCustomers,
+                'corporate_customers' => $corporateCustomers,
+                'affiliate_customers' => $affiliateCustomers,
+                'active_this_month' => $activeThisMonth,
+            ],
+        ]);
+    }
+
+    public function exportCsv(Request $request)
+    {
+        $user = $request->user();
+
+        if (! $user instanceof User) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $company = Company::first();
+
+        if (! $company) {
+            return response()->json([
+                'message' => 'Company not found'
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'customer_type' => 'sometimes|nullable|string|max:100',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $query = Customer::where('company_id', $company->id)->orderByDesc('id');
+
+        if ($request->filled('customer_type')) {
+            $query->where('customer_type', $request->customer_type);
+        }
+
+        $customers = $query->get();
+        $fileName = 'customers_export_' . now()->format('Ymd_His') . '.csv';
+
+        return response()->streamDownload(function () use ($customers): void {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, [
+                'customer_id',
+                'name',
+                'email',
+                'phone',
+                'customer_company',
+                'customer_type',
+                'preferred_service_level',
+                'dispatch_note',
+                'email_verified_at',
+                'created_at',
+                'updated_at',
+            ]);
+
+            foreach ($customers as $customer) {
+                fputcsv($handle, [
+                    $customer->id,
+                    $customer->name,
+                    $customer->email,
+                    $customer->phone,
+                    $customer->customer_company,
+                    $customer->customer_type,
+                    $customer->preferred_service_level,
+                    $customer->dispatch_note,
+                    $customer->email_verified_at,
+                    $customer->created_at,
+                    $customer->updated_at,
+                ]);
+            }
+
+            fclose($handle);
+        }, $fileName, [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
     // Admin: list customers for company
     public function index(Request $request)
     {

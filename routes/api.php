@@ -84,6 +84,8 @@ Route::middleware(['auth:sanctum', 'abilities:customer'])->post('customer/self-u
 
 // Authenticated Customer Routes For Admin & Dispatcher
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('customers', [CustomerController::class, 'index']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('customers/dashboard-summary', [CustomerController::class, 'dashboardSummary']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('customers/export/csv', [CustomerController::class, 'exportCsv']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('customers', [CustomerController::class, 'store']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('customers/{id}', [CustomerController::class, 'show']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('customers/update/{id}', [CustomerController::class, 'update']);
