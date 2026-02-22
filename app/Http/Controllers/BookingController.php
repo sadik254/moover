@@ -105,6 +105,116 @@ class BookingController extends Controller
         return response()->json(['data' => $bookings]);
     }
 
+    public function exportCsv(Request $request)
+    {
+        $user = $request->user();
+        if (! $user instanceof User) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $company = $this->getCompany();
+        if (! $company) {
+            return response()->json(['message' => 'Company not found'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'date_from' => 'required|date',
+            'date_to' => 'required|date|after_or_equal:date_from',
+            'status' => ['sometimes', 'nullable', Rule::in(['pending', 'confirmed', 'assigned', 'on_route', 'completed', 'cancelled'])],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $query = Booking::with([
+                'customer:id,name,email,phone',
+                'driver:id,name',
+                'vehicle:id,name',
+            ])
+            ->where('company_id', $company->id)
+            ->whereDate('pickup_time', '>=', $request->date_from)
+            ->whereDate('pickup_time', '<=', $request->date_to)
+            ->orderByDesc('id');
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $bookings = $query->get();
+
+        $fileName = sprintf(
+            'bookings_%s_to_%s.csv',
+            Carbon::parse($request->date_from)->format('Ymd'),
+            Carbon::parse($request->date_to)->format('Ymd')
+        );
+
+        return response()->streamDownload(function () use ($bookings): void {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, [
+                'booking_id',
+                'status',
+                'service_type',
+                'pickup_time',
+                'dropoff_time',
+                'pickup_address',
+                'dropoff_address',
+                'customer_id',
+                'customer_name',
+                'customer_email',
+                'customer_phone',
+                'driver_id',
+                'driver_name',
+                'vehicle_id',
+                'vehicle_name',
+                'distance_km',
+                'hours',
+                'total_price',
+                'final_price',
+                'payment_method',
+                'payment_status',
+                'created_at',
+                'updated_at',
+            ]);
+
+            foreach ($bookings as $booking) {
+                fputcsv($handle, [
+                    $booking->id,
+                    $booking->status,
+                    $booking->service_type,
+                    $booking->pickup_time,
+                    $booking->dropoff_time,
+                    $booking->pickup_address,
+                    $booking->dropoff_address,
+                    $booking->customer_id,
+                    $booking->customer?->name,
+                    $booking->customer?->email,
+                    $booking->customer?->phone,
+                    $booking->driver_id,
+                    $booking->driver?->name,
+                    $booking->vehicle_id,
+                    $booking->vehicle?->name,
+                    $booking->distance_km,
+                    $booking->hours,
+                    $booking->total_price,
+                    $booking->final_price,
+                    $booking->payment_method,
+                    $booking->payment_status,
+                    $booking->created_at,
+                    $booking->updated_at,
+                ]);
+            }
+
+            fclose($handle);
+        }, $fileName, [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
     public function dashboardSummary(Request $request)
     {
         $user = $request->user();

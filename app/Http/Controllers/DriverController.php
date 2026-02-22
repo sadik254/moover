@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Mail\DriverCreatedPasswordMail;
 use App\Mail\DriverPasswordResetCodeMail;
+use App\Models\Booking;
 use App\Models\Company;
 use App\Models\Driver;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -19,6 +21,121 @@ use Uploadcare\Configuration;
 
 class DriverController extends Controller
 {
+    public function dashboardSummary(Request $request)
+    {
+        $user = $request->user();
+
+        if (! $user instanceof User) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $company = Company::first();
+
+        if (! $company) {
+            return response()->json([
+                'message' => 'Company not found'
+            ], 404);
+        }
+
+        $totalDrivers = Driver::where('company_id', $company->id)->count();
+
+        $onlineDrivers = Driver::where('company_id', $company->id)
+            ->where('status', 'online')
+            ->count();
+
+        $onTripDrivers = Booking::where('company_id', $company->id)
+            ->whereIn('status', ['assigned', 'on_route', 'in_progress'])
+            ->whereNotNull('driver_id')
+            ->distinct('driver_id')
+            ->count('driver_id');
+
+        $pendingApprovals = Driver::where('company_id', $company->id)
+            ->where('status', 'pending')
+            ->count();
+
+        return response()->json([
+            'data' => [
+                'total_drivers' => $totalDrivers,
+                'online_drivers' => $onlineDrivers,
+                'on_trip' => $onTripDrivers,
+                'pending_approvals' => $pendingApprovals,
+            ],
+        ]);
+    }
+
+    public function exportCsv(Request $request)
+    {
+        $user = $request->user();
+
+        if (! $user instanceof User) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $company = Company::first();
+
+        if (! $company) {
+            return response()->json([
+                'message' => 'Company not found'
+            ], 404);
+        }
+
+        $drivers = Driver::where('company_id', $company->id)
+            ->orderByDesc('id')
+            ->get();
+
+        $fileName = 'drivers_export_' . now()->format('Ymd_His') . '.csv';
+
+        return response()->streamDownload(function () use ($drivers): void {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, [
+                'driver_id',
+                'name',
+                'email',
+                'phone',
+                'status',
+                'available',
+                'employment_type',
+                'commission',
+                'license_number',
+                'license_expiry',
+                'vehicle_id',
+                'address',
+                'license_front',
+                'license_back',
+                'photo',
+                'created_at',
+                'updated_at',
+            ]);
+
+            foreach ($drivers as $driver) {
+                fputcsv($handle, [
+                    $driver->id,
+                    $driver->name,
+                    $driver->email,
+                    $driver->phone,
+                    $driver->status,
+                    $driver->available,
+                    $driver->employment_type,
+                    $driver->commission,
+                    $driver->license_number,
+                    $driver->license_expiry,
+                    $driver->vehicle_id,
+                    $driver->address,
+                    $driver->license_front,
+                    $driver->license_back,
+                    $driver->photo,
+                    $driver->created_at,
+                    $driver->updated_at,
+                ]);
+            }
+
+            fclose($handle);
+        }, $fileName, [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
     public function index(Request $request)
     {
         $company = Company::first();

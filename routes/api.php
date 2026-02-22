@@ -58,6 +58,8 @@ Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->delete('/vehi
 
 // Authenticated Driver Routes For Admin & Dispatcher
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('drivers', [DriverController::class, 'index']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('drivers/dashboard-summary', [DriverController::class, 'dashboardSummary']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('drivers/export/csv', [DriverController::class, 'exportCsv']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('drivers', [DriverController::class, 'store']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('drivers/{id}', [DriverController::class, 'show']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('drivers/update/{id}', [DriverController::class, 'update']);
@@ -90,6 +92,7 @@ Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->delete('custo
 // Booking routes
 Route::post('bookings', [BookingController::class, 'store']); // public: quote + create
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings', [BookingController::class, 'index']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings/export/csv', [BookingController::class, 'exportCsv']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings/dashboard-summary', [BookingController::class, 'dashboardSummary']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings/live-operations-feed', [BookingController::class, 'liveOperationsFeed']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings/vehicle-availability', [BookingController::class, 'vehicleAvailability']);
