@@ -326,6 +326,79 @@ class DriverController extends Controller
         return response()->json(['message' => 'Logged out successfully'], 200);
     }
 
+    public function updatePassword(Request $request)
+    {
+        $driver = $request->user();
+
+        if (! $driver instanceof Driver) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'old_password' => 'required|string|min:6',
+            'new_password' => 'required|string|min:6|confirmed',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        if (! Hash::check($request->old_password, (string) $driver->password)) {
+            return response()->json([
+                'message' => 'Old password is incorrect',
+            ], 422);
+        }
+
+        $driver->password = Hash::make($request->new_password);
+        $driver->save();
+
+        return response()->json([
+            'message' => 'Password updated successfully',
+        ], 200);
+    }
+
+    public function myBookings(Request $request)
+    {
+        $driver = $request->user();
+
+        if (! $driver instanceof Driver) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'status' => ['sometimes', 'nullable', Rule::in(['pending', 'confirmed', 'assigned', 'on_route', 'completed', 'cancelled'])],
+            'per_page' => 'sometimes|integer|min:1|max:100',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $query = Booking::with([
+                'customer:id,name,email,phone',
+                'vehicle:id,name,vehicle_class_id,plate_number,color,model,image',
+            ])
+            ->where('driver_id', $driver->id)
+            ->orderByDesc('pickup_time');
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $perPage = (int) $request->input('per_page', 15);
+        $bookings = $query->paginate($perPage)->withQueryString();
+
+        return response()->json([
+            'data' => $bookings,
+        ]);
+    }
+
     public function requestPasswordResetCode(Request $request)
     {
         $validator = Validator::make($request->all(), [

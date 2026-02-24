@@ -70,7 +70,9 @@ Route::post('driver/login', [DriverController::class, 'login']);
 Route::post('driver/request-password-reset-code', [DriverController::class, 'requestPasswordResetCode']);
 Route::post('driver/reset-password-with-code', [DriverController::class, 'resetPasswordWithCode']);
 Route::middleware(['auth:sanctum', 'abilities:driver'])->get('driver/me', [DriverController::class, 'me']);
+Route::middleware(['auth:sanctum', 'abilities:driver'])->get('driver/bookings', [DriverController::class, 'myBookings']);
 Route::middleware(['auth:sanctum', 'abilities:driver'])->post('driver/logout', [DriverController::class, 'logout']);
+Route::middleware(['auth:sanctum', 'abilities:driver'])->post('driver/update-password', [DriverController::class, 'updatePassword']);
 
 // Customer auth routes (abilities-based)
 Route::post('customer/register', [CustomerController::class, 'register']);
