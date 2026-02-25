@@ -1045,6 +1045,277 @@ class BookingController extends Controller
         return response()->json(['message' => 'Booking deleted successfully'], 200);
     }
 
+    public function assignDriver(Request $request, $id)
+    {
+        $user = $request->user();
+        if (! $user instanceof User) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $company = $this->getCompany();
+        if (! $company) {
+            return response()->json(['message' => 'Company not found'], 404);
+        }
+
+        $booking = Booking::where('company_id', $company->id)
+            ->where('id', $id)
+            ->first();
+
+        if (! $booking) {
+            return response()->json(['message' => 'Booking not found'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'driver_id' => [
+                'required',
+                Rule::exists('drivers', 'id')->where('company_id', $company->id),
+            ],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        if (in_array((string) $booking->status, ['completed', 'cancelled'], true)) {
+            return response()->json([
+                'message' => 'Driver assignment is not allowed for completed/cancelled bookings',
+            ], 422);
+        }
+
+        $pickup = Carbon::parse($booking->pickup_time);
+        $dropoff = $booking->dropoff_time ? Carbon::parse($booking->dropoff_time) : null;
+        $unavailableDriverIds = $this->getUnavailableDriverIds($company->id, $pickup, $dropoff, $booking->id);
+
+        if (in_array((int) $request->driver_id, $unavailableDriverIds, true)) {
+            return response()->json([
+                'message' => 'Selected driver is not available for the requested time',
+            ], 409);
+        }
+
+        $oldValues = ['driver_id' => $booking->driver_id];
+        $booking->driver_id = (int) $request->driver_id;
+        $booking->save();
+
+        $this->logBookingActivity(
+            request: $request,
+            booking: $booking,
+            action: 'driver_assigned',
+            description: 'Driver assigned by admin/dispatcher',
+            oldValues: $oldValues,
+            newValues: ['driver_id' => $booking->driver_id]
+        );
+
+        return response()->json([
+            'message' => 'Driver assigned successfully',
+            'data' => $booking->fresh(),
+        ]);
+    }
+
+    public function updateStatusOnly(Request $request, $id)
+    {
+        $user = $request->user();
+        if (! $user instanceof User) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $company = $this->getCompany();
+        if (! $company) {
+            return response()->json(['message' => 'Company not found'], 404);
+        }
+
+        $booking = Booking::where('company_id', $company->id)
+            ->where('id', $id)
+            ->first();
+
+        if (! $booking) {
+            return response()->json(['message' => 'Booking not found'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'status' => ['required', Rule::in(['pending', 'confirmed', 'assigned', 'on_route', 'completed', 'cancelled'])],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $oldValues = ['status' => $booking->status];
+        $booking->status = (string) $request->status;
+
+        if ($booking->status === 'cancelled') {
+            $systemConfig = $this->getSystemConfig($booking->company_id);
+            $priceCalculation = $this->buildCancellationPriceCalculation(
+                cancellationFee: (float) ($systemConfig->cancellation_fee ?? 0),
+                serviceType: (string) ($booking->service_type ?? 'custom')
+            );
+
+            $booking->base_price = 0;
+            $booking->extras_price = 0;
+            $booking->parking = 0;
+            $booking->others = 0;
+            $booking->airport_fees = 0;
+            $booking->congestion_charge = 0;
+            $booking->taxes = 0;
+            $booking->taxes_amount = 0;
+            $booking->gratuity = 0;
+            $booking->gratuity_amount = 0;
+            $booking->rate_buffer = 0;
+            $booking->rate_buffer_amount = 0;
+            $booking->surge_rate = 0;
+            $booking->surge_rate_amount = 0;
+            $booking->cancellation_fee = $priceCalculation['cancellation_fee'];
+            $booking->total_price = $priceCalculation['total_price'];
+            $booking->final_price = $priceCalculation['total_price'];
+        }
+
+        $booking->save();
+        $freshBooking = $booking->fresh();
+
+        $cancellationPayment = null;
+        if ((string) $freshBooking->status === 'cancelled') {
+            $cancellationPayment = $this->captureCancellationPayment($freshBooking);
+        }
+
+        $this->logBookingActivity(
+            request: $request,
+            booking: $freshBooking,
+            action: $freshBooking->status === 'cancelled' ? 'booking_cancelled' : 'status_changed',
+            description: 'Booking status updated by admin/dispatcher',
+            oldValues: $oldValues,
+            newValues: ['status' => $freshBooking->status]
+        );
+
+        $response = [
+            'message' => 'Booking status updated successfully',
+            'data' => $freshBooking,
+        ];
+
+        if ($cancellationPayment) {
+            $response['cancellation_payment'] = $cancellationPayment;
+        }
+
+        return response()->json($response);
+    }
+
+    public function cancelBooking(Request $request, $id)
+    {
+        $user = $request->user();
+        if (! $user instanceof User) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $company = $this->getCompany();
+        if (! $company) {
+            return response()->json(['message' => 'Company not found'], 404);
+        }
+
+        $booking = Booking::where('company_id', $company->id)
+            ->where('id', $id)
+            ->first();
+
+        if (! $booking) {
+            return response()->json(['message' => 'Booking not found'], 404);
+        }
+
+        if ((string) $booking->status === 'cancelled') {
+            return response()->json([
+                'message' => 'Booking is already cancelled',
+                'data' => $booking,
+            ], 200);
+        }
+
+        $oldValues = $booking->only([
+            'status',
+            'base_price',
+            'extras_price',
+            'parking',
+            'others',
+            'airport_fees',
+            'congestion_charge',
+            'taxes',
+            'taxes_amount',
+            'gratuity',
+            'gratuity_amount',
+            'rate_buffer',
+            'rate_buffer_amount',
+            'surge_rate',
+            'surge_rate_amount',
+            'cancellation_fee',
+            'total_price',
+            'final_price',
+        ]);
+
+        $systemConfig = $this->getSystemConfig($booking->company_id);
+        $priceCalculation = $this->buildCancellationPriceCalculation(
+            cancellationFee: (float) ($systemConfig->cancellation_fee ?? 0),
+            serviceType: (string) ($booking->service_type ?? 'custom')
+        );
+
+        $booking->status = 'cancelled';
+        $booking->base_price = 0;
+        $booking->extras_price = 0;
+        $booking->parking = 0;
+        $booking->others = 0;
+        $booking->airport_fees = 0;
+        $booking->congestion_charge = 0;
+        $booking->taxes = 0;
+        $booking->taxes_amount = 0;
+        $booking->gratuity = 0;
+        $booking->gratuity_amount = 0;
+        $booking->rate_buffer = 0;
+        $booking->rate_buffer_amount = 0;
+        $booking->surge_rate = 0;
+        $booking->surge_rate_amount = 0;
+        $booking->cancellation_fee = $priceCalculation['cancellation_fee'];
+        $booking->total_price = $priceCalculation['total_price'];
+        $booking->final_price = $priceCalculation['total_price'];
+        $booking->save();
+
+        $freshBooking = $booking->fresh();
+        $cancellationPayment = $this->captureCancellationPayment($freshBooking);
+
+        $this->logBookingActivity(
+            request: $request,
+            booking: $freshBooking,
+            action: 'booking_cancelled',
+            description: 'Booking cancelled by admin/dispatcher',
+            oldValues: $oldValues,
+            newValues: [
+                'status' => $freshBooking->status,
+                'base_price' => $freshBooking->base_price,
+                'extras_price' => $freshBooking->extras_price,
+                'parking' => $freshBooking->parking,
+                'others' => $freshBooking->others,
+                'airport_fees' => $freshBooking->airport_fees,
+                'congestion_charge' => $freshBooking->congestion_charge,
+                'taxes' => $freshBooking->taxes,
+                'taxes_amount' => $freshBooking->taxes_amount,
+                'gratuity' => $freshBooking->gratuity,
+                'gratuity_amount' => $freshBooking->gratuity_amount,
+                'rate_buffer' => $freshBooking->rate_buffer,
+                'rate_buffer_amount' => $freshBooking->rate_buffer_amount,
+                'surge_rate' => $freshBooking->surge_rate,
+                'surge_rate_amount' => $freshBooking->surge_rate_amount,
+                'cancellation_fee' => $freshBooking->cancellation_fee,
+                'total_price' => $freshBooking->total_price,
+                'final_price' => $freshBooking->final_price,
+            ]
+        );
+
+        return response()->json([
+            'message' => 'Booking cancelled successfully',
+            'data' => $freshBooking,
+            'calculation' => $this->buildCalculationBreakdown($priceCalculation),
+            'cancellation_payment' => $cancellationPayment,
+        ]);
+    }
+
     /**
      * Get the company instance
      */
@@ -1084,6 +1355,34 @@ class BookingController extends Controller
         }
 
         return $query->pluck('vehicle_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function getUnavailableDriverIds(int $companyId, Carbon $pickup, ?Carbon $dropoff, ?int $excludeBookingId = null): array
+    {
+        $windowStart = $dropoff ? $pickup : $pickup->copy()->subHours(2);
+        $windowEnd = $dropoff ? $dropoff : $pickup->copy()->addHours(2);
+
+        $query = Booking::where('company_id', $companyId)
+            ->where(function ($query) use ($windowStart, $windowEnd) {
+                $query->where(function ($q) use ($windowStart, $windowEnd) {
+                    $q->whereNotNull('dropoff_time')
+                        ->where('pickup_time', '<=', $windowEnd)
+                        ->where('dropoff_time', '>=', $windowStart);
+                })->orWhere(function ($q) use ($windowStart, $windowEnd) {
+                    $q->whereNull('dropoff_time')
+                        ->whereBetween('pickup_time', [$windowStart, $windowEnd]);
+                });
+            });
+
+        if ($excludeBookingId) {
+            $query->where('id', '!=', $excludeBookingId);
+        }
+
+        return $query->pluck('driver_id')
             ->filter()
             ->unique()
             ->values()

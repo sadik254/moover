@@ -104,6 +104,9 @@ Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings
 Route::middleware(['auth:sanctum', 'abilities:customer'])->get('customer/bookings', [BookingController::class, 'customerBookings']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings/{id}', [BookingController::class, 'show']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('bookings/update/{id}', [BookingController::class, 'update']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('bookings/{id}/assign-driver', [BookingController::class, 'assignDriver']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('bookings/{id}/update-status', [BookingController::class, 'updateStatusOnly']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('bookings/{id}/cancel', [BookingController::class, 'cancelBooking']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->delete('bookings/{id}', [BookingController::class, 'destroy']);
 
 // Booking payment routes
