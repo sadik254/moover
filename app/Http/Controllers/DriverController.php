@@ -146,7 +146,22 @@ class DriverController extends Controller
             ], 404);
         }
 
-        $drivers = Driver::where('company_id', $company->id)->get();
+        $validator = Validator::make($request->all(), [
+            'per_page' => 'sometimes|integer|min:1|max:100',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $perPage = (int) $request->input('per_page', 15);
+        $drivers = Driver::where('company_id', $company->id)
+            ->orderByDesc('id')
+            ->paginate($perPage)
+            ->withQueryString();
 
         return response()->json([
             'data' => $drivers
