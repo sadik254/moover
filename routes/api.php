@@ -119,6 +119,20 @@ Route::apiResource('formtemplates', FormtemplateController::class);
 
 Route::apiResource('formsubmissions', FormsubmissionController::class);
 
-Route::apiResource('affiliates', AffiliateController::class);
+// Authenticated Affiliate Routes For Admin & Dispatcher
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('affiliates', [AffiliateController::class, 'index']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('affiliates', [AffiliateController::class, 'store']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('affiliates/{id}', [AffiliateController::class, 'show']);
+// Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('affiliates/update/{id}', [AffiliateController::class, 'update']);
+// Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->delete('affiliates/{id}', [AffiliateController::class, 'destroy']);
 
-Route::apiResource('affiliateclicks', AffiliateclickController::class);
+
+// Affiliate auth route
+Route::post('affiliate/login', [AffiliateController::class, 'login']);
+Route::post('affiliate/request-password-reset-code', [AffiliateController::class, 'requestPasswordResetCode']);
+Route::post('affiliate/reset-password-with-code', [AffiliateController::class, 'resetPasswordWithCode']);
+Route::middleware(['auth:sanctum', 'abilities:affiliate'])->get('affiliate/me', [AffiliateController::class, 'me']);
+Route::middleware(['auth:sanctum', 'abilities:affiliate'])->post('affiliate/logout', [AffiliateController::class, 'logout']);
+Route::middleware(['auth:sanctum', 'abilities:affiliate'])->post('affiliate/update-password', [AffiliateController::class, 'updatePassword']);
+
+// Route::apiResource('affiliateclicks', AffiliateclickController::class);
