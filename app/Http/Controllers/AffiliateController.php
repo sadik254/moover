@@ -532,8 +532,12 @@ class AffiliateController extends Controller
             return response()->json(['message' => 'Booking not found'], 404);
         }
 
-        if (in_array((string) $booking->affiliate_status, ['completed', 'cancelled'], true)) {
-            return response()->json(['message' => 'This booking state can no longer be changed'], 422);
+        $currentState = (string) ($booking->affiliate_status ?? 'offered');
+
+        if (! $this->canTransitionAffiliateState($currentState, $targetState)) {
+            return response()->json([
+                'message' => "Invalid affiliate status transition from '{$currentState}' to '{$targetState}'",
+            ], 422);
         }
 
         $booking->affiliate_status = $targetState;
@@ -552,6 +556,28 @@ class AffiliateController extends Controller
             'message' => 'Affiliate booking status updated successfully',
             'data' => $booking,
         ]);
+    }
+
+    private function canTransitionAffiliateState(string $currentState, string $targetState): bool
+    {
+        if ($currentState === $targetState) {
+            return true;
+        }
+
+        $allowedTransitions = [
+            'offered' => ['accepted', 'rejected'],
+            'accepted' => ['in_progress', 'cancelled'],
+            'in_progress' => ['completed', 'cancelled'],
+            'rejected' => [],
+            'completed' => [],
+            'cancelled' => [],
+        ];
+
+        if (! array_key_exists($currentState, $allowedTransitions)) {
+            return false;
+        }
+
+        return in_array($targetState, $allowedTransitions[$currentState], true);
     }
 
     private function generateResetCode(): string
