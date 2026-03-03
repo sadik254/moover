@@ -105,6 +105,7 @@ Route::middleware(['auth:sanctum', 'abilities:customer'])->get('customer/booking
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings/{id}', [BookingController::class, 'show']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('bookings/update/{id}', [BookingController::class, 'update']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('bookings/{id}/assign-driver', [BookingController::class, 'assignDriver']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('bookings/{id}/assign-affiliate', [BookingController::class, 'assignAffiliate']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('bookings/{id}/update-status', [BookingController::class, 'updateStatusOnly']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('bookings/{id}/cancel', [BookingController::class, 'cancelBooking']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->delete('bookings/{id}', [BookingController::class, 'destroy']);
@@ -115,9 +116,9 @@ Route::middleware(['auth:sanctum'])->get('bookings/{id}/payment', [BookingPaymen
 Route::post('bookings/{id}/payment/authorize', [BookingPaymentController::class, 'authorizePayment']);
 Route::middleware(['auth:sanctum'])->post('bookings/{id}/payment/capture', [BookingPaymentController::class, 'capturePayment']);
 
-Route::apiResource('formtemplates', FormtemplateController::class);
+// Route::apiResource('formtemplates', FormtemplateController::class);
 
-Route::apiResource('formsubmissions', FormsubmissionController::class);
+// Route::apiResource('formsubmissions', FormsubmissionController::class);
 
 // Authenticated Affiliate Routes For Admin & Dispatcher
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('affiliates', [AffiliateController::class, 'index']);
@@ -134,5 +135,10 @@ Route::post('affiliate/reset-password-with-code', [AffiliateController::class, '
 Route::middleware(['auth:sanctum', 'abilities:affiliate'])->get('affiliate/me', [AffiliateController::class, 'me']);
 Route::middleware(['auth:sanctum', 'abilities:affiliate'])->post('affiliate/logout', [AffiliateController::class, 'logout']);
 Route::middleware(['auth:sanctum', 'abilities:affiliate'])->post('affiliate/update-password', [AffiliateController::class, 'updatePassword']);
+Route::middleware(['auth:sanctum', 'abilities:affiliate'])->get('affiliate/bookings', [AffiliateController::class, 'bookings']);
+Route::middleware(['auth:sanctum', 'abilities:affiliate'])->get('affiliate/bookings/{id}', [AffiliateController::class, 'showBooking']);
+Route::middleware(['auth:sanctum', 'abilities:affiliate'])->post('affiliate/bookings/{id}/accept', [AffiliateController::class, 'acceptBooking']);
+Route::middleware(['auth:sanctum', 'abilities:affiliate'])->post('affiliate/bookings/{id}/reject', [AffiliateController::class, 'rejectBooking']);
+Route::middleware(['auth:sanctum', 'abilities:affiliate'])->post('affiliate/bookings/{id}/status', [AffiliateController::class, 'updateBookingStatus']);
 
 // Route::apiResource('affiliateclicks', AffiliateclickController::class);

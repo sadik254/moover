@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\AffiliateCreatedPasswordMail;
 use App\Mail\AffiliatePasswordResetCodeMail;
 use App\Models\Affiliate;
+use App\Models\Booking;
 use App\Models\Company;
 use App\Models\User;
 use Carbon\Carbon;
@@ -349,6 +350,108 @@ class AffiliateController extends Controller
         ]);
     }
 
+    public function bookings(Request $request)
+    {
+        $user = $request->user();
+
+        if (! $user instanceof User || $user->user_type !== 'affiliate') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $affiliate = Affiliate::where('user_id', $user->id)->first();
+        if (! $affiliate) {
+            return response()->json(['message' => 'Affiliate profile not found'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'affiliate_status' => ['sometimes', 'nullable', Rule::in(['offered', 'accepted', 'rejected', 'in_progress', 'completed', 'cancelled'])],
+            'per_page' => 'sometimes|integer|min:1|max:100',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $query = Booking::with([
+                'customer:id,name,email,phone',
+                'vehicle:id,name,plate_number,color,model,image',
+            ])
+            ->where('affiliate_id', $affiliate->id)
+            ->orderByDesc('id');
+
+        if ($request->filled('affiliate_status')) {
+            $query->where('affiliate_status', $request->affiliate_status);
+        }
+
+        $perPage = (int) $request->input('per_page', 15);
+        $bookings = $query->paginate($perPage)->withQueryString();
+
+        return response()->json(['data' => $bookings]);
+    }
+
+    public function showBooking(Request $request, $id)
+    {
+        $user = $request->user();
+
+        if (! $user instanceof User || $user->user_type !== 'affiliate') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $affiliate = Affiliate::where('user_id', $user->id)->first();
+        if (! $affiliate) {
+            return response()->json(['message' => 'Affiliate profile not found'], 404);
+        }
+
+        $booking = Booking::with([
+                'customer:id,name,email,phone',
+                'vehicle:id,name,plate_number,color,model,image',
+            ])
+            ->where('affiliate_id', $affiliate->id)
+            ->where('id', $id)
+            ->first();
+
+        if (! $booking) {
+            return response()->json(['message' => 'Booking not found'], 404);
+        }
+
+        return response()->json(['data' => $booking]);
+    }
+
+    public function acceptBooking(Request $request, $id)
+    {
+        return $this->updateAffiliateBookingState($request, $id, 'accepted');
+    }
+
+    public function rejectBooking(Request $request, $id)
+    {
+        return $this->updateAffiliateBookingState($request, $id, 'rejected');
+    }
+
+    public function updateBookingStatus(Request $request, $id)
+    {
+        $validator = Validator::make($request->all(), [
+            'affiliate_status' => ['required', Rule::in(['in_progress', 'completed', 'cancelled'])],
+            'affiliate_reference' => 'sometimes|nullable|string|max:255',
+            'affiliate_notes' => 'sometimes|nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        return $this->updateAffiliateBookingState(
+            request: $request,
+            id: $id,
+           targetState: (string) $request->affiliate_status
+        );
+    }
+
     public function logout(Request $request)
     {
         $user = $request->user();
@@ -406,6 +509,49 @@ class AffiliateController extends Controller
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    private function updateAffiliateBookingState(Request $request, $id, string $targetState)
+    {
+        $user = $request->user();
+
+        if (! $user instanceof User || $user->user_type !== 'affiliate') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $affiliate = Affiliate::where('user_id', $user->id)->first();
+        if (! $affiliate) {
+            return response()->json(['message' => 'Affiliate profile not found'], 404);
+        }
+
+        $booking = Booking::where('affiliate_id', $affiliate->id)
+            ->where('id', $id)
+            ->first();
+
+        if (! $booking) {
+            return response()->json(['message' => 'Booking not found'], 404);
+        }
+
+        if (in_array((string) $booking->affiliate_status, ['completed', 'cancelled'], true)) {
+            return response()->json(['message' => 'This booking state can no longer be changed'], 422);
+        }
+
+        $booking->affiliate_status = $targetState;
+
+        if ($request->has('affiliate_reference')) {
+            $booking->affiliate_reference = $request->affiliate_reference;
+        }
+
+        if ($request->has('affiliate_notes')) {
+            $booking->affiliate_notes = $request->affiliate_notes;
+        }
+
+        $booking->save();
+
+        return response()->json([
+            'message' => 'Affiliate booking status updated successfully',
+            'data' => $booking,
+        ]);
     }
 
     private function generateResetCode(): string

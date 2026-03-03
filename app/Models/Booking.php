@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Driver;
+use App\Models\Affiliate;
 use App\Models\Vehicle;
 use App\Models\BookingPayment;
 use App\Models\BookingActivity;
@@ -24,6 +25,7 @@ class Booking extends Model
         'phone',
         'vehicle_id',
         'driver_id',
+        'affiliate_id',
         'service_type',
         'pickup_address',
         'dropoff_address',
@@ -56,6 +58,9 @@ class Booking extends Model
         'payment_method',
         'payment_status',
         'status',
+        'affiliate_status',
+        'affiliate_reference',
+        'affiliate_notes',
         'notes',
     ];
 
@@ -81,6 +86,11 @@ class Booking extends Model
     public function driver()
     {
         return $this->belongsTo(Driver::class);
+    }
+
+    public function affiliate()
+    {
+        return $this->belongsTo(Affiliate::class);
     }
 
     public function payments()

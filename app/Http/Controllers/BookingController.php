@@ -8,6 +8,7 @@ use App\Models\BookingPayment;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Driver;
+use App\Models\Affiliate;
 use App\Models\SystemConfig;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -1110,6 +1111,85 @@ class BookingController extends Controller
 
         return response()->json([
             'message' => 'Driver assigned successfully',
+            'data' => $booking->fresh(),
+        ]);
+    }
+
+    public function assignAffiliate(Request $request, $id)
+    {
+        $user = $request->user();
+        if (! $user instanceof User) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $company = $this->getCompany();
+        if (! $company) {
+            return response()->json(['message' => 'Company not found'], 404);
+        }
+
+        $booking = Booking::where('company_id', $company->id)
+            ->where('id', $id)
+            ->first();
+
+        if (! $booking) {
+            return response()->json(['message' => 'Booking not found'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'affiliate_id' => [
+                'required',
+                Rule::exists('affiliates', 'id')->where('company_id', $company->id),
+            ],
+            'affiliate_reference' => 'sometimes|nullable|string|max:255',
+            'affiliate_notes' => 'sometimes|nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        if (in_array((string) $booking->status, ['completed', 'cancelled'], true)) {
+            return response()->json([
+                'message' => 'Affiliate assignment is not allowed for completed/cancelled bookings',
+            ], 422);
+        }
+
+        $oldValues = [
+            'affiliate_id' => $booking->affiliate_id,
+            'affiliate_status' => $booking->affiliate_status,
+            'affiliate_reference' => $booking->affiliate_reference,
+            'affiliate_notes' => $booking->affiliate_notes,
+        ];
+
+        $booking->affiliate_id = (int) $request->affiliate_id;
+        $booking->affiliate_status = 'offered';
+        if ($request->has('affiliate_reference')) {
+            $booking->affiliate_reference = $request->affiliate_reference;
+        }
+        if ($request->has('affiliate_notes')) {
+            $booking->affiliate_notes = $request->affiliate_notes;
+        }
+        $booking->save();
+
+        $this->logBookingActivity(
+            request: $request,
+            booking: $booking,
+            action: 'affiliate_assigned',
+            description: 'Affiliate assigned by admin/dispatcher',
+            oldValues: $oldValues,
+            newValues: [
+                'affiliate_id' => $booking->affiliate_id,
+                'affiliate_status' => $booking->affiliate_status,
+                'affiliate_reference' => $booking->affiliate_reference,
+                'affiliate_notes' => $booking->affiliate_notes,
+            ]
+        );
+
+        return response()->json([
+            'message' => 'Affiliate assigned successfully',
             'data' => $booking->fresh(),
         ]);
     }
