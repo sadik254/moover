@@ -13,6 +13,7 @@ use App\Http\Controllers\VehicleController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\SystemConfigController;
 use App\Http\Controllers\BookingPaymentController;
+use App\Http\Controllers\AffiliateSettlementController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -109,6 +110,12 @@ Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('booking
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('bookings/{id}/update-status', [BookingController::class, 'updateStatusOnly']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('bookings/{id}/cancel', [BookingController::class, 'cancelBooking']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->delete('bookings/{id}', [BookingController::class, 'destroy']);
+
+// Affiliate settlement routes (admin/dispatcher)
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('affiliate-settlements', [AffiliateSettlementController::class, 'index']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('affiliate-settlements/{id}', [AffiliateSettlementController::class, 'show']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->post('affiliate-settlements/{id}/disburse', [AffiliateSettlementController::class, 'disburse']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('affiliate-disbursements', [AffiliateSettlementController::class, 'disbursements']);
 
 // Booking payment routes
 Route::post('payments/webhook/stripe', [BookingPaymentController::class, 'webhook']);

@@ -11,6 +11,7 @@ use App\Models\Affiliate;
 use App\Models\Vehicle;
 use App\Models\BookingPayment;
 use App\Models\BookingActivity;
+use App\Models\AffiliateBookingSettlement;
 
 class Booking extends Model
 {
@@ -106,5 +107,10 @@ class Booking extends Model
     public function activities()
     {
         return $this->hasMany(BookingActivity::class);
+    }
+
+    public function settlement()
+    {
+        return $this->hasOne(AffiliateBookingSettlement::class);
     }
 }

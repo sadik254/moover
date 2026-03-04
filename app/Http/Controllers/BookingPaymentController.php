@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Booking;
+use App\Models\Affiliate;
+use App\Models\AffiliateBookingSettlement;
 use App\Models\BookingPayment;
 use App\Models\Company;
 use App\Models\Customer;
@@ -281,6 +283,42 @@ class BookingPaymentController extends Controller
 
             $booking->payment_status = $capturedIntent->status === 'succeeded' ? 'paid' : $capturedIntent->status;
             $booking->save();
+
+            if (
+                $booking->affiliate_id &&
+                in_array((string) $booking->affiliate_status, ['accepted', 'in_progress', 'completed'], true)
+            ) {
+                $affiliate = Affiliate::find($booking->affiliate_id);
+                if ($affiliate) {
+                    $grossAmount = (float) ($booking->final_price ?? $booking->total_price ?? 0);
+                    $affiliatePercent = (float) ($affiliate->affiliate_payout_percent ?? 0);
+                    $platformPercent = (float) ($affiliate->platform_commission_percent ?? 0);
+
+                    $settlement = AffiliateBookingSettlement::firstOrNew([
+                        'booking_id' => $booking->id,
+                    ]);
+
+                    $settlement->affiliate_id = $affiliate->id;
+                    $settlement->gross_amount = $grossAmount;
+                    $settlement->affiliate_percent = $affiliatePercent;
+                    $settlement->platform_percent = $platformPercent;
+                    $settlement->affiliate_amount = round($grossAmount * ($affiliatePercent / 100), 2);
+                    $settlement->platform_amount = round($grossAmount * ($platformPercent / 100), 2);
+                    $settlement->currency = strtolower((string) ($affiliate->payout_currency ?: 'usd'));
+                    $settlement->accepted_at = $settlement->accepted_at ?: now();
+
+                    if (! empty($affiliate->stripe_connect_account_id)) {
+                        $settlement->status = 'ready';
+                        $settlement->status_reason = null;
+                        $settlement->ready_at = now();
+                    } else {
+                        $settlement->status = 'on_hold';
+                        $settlement->status_reason = 'missing_stripe_account';
+                    }
+
+                    $settlement->save();
+                }
+            }
 
             return response()->json([
                 'message' => 'Payment captured',

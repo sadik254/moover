@@ -9,6 +9,7 @@ use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Driver;
 use App\Models\Affiliate;
+use App\Models\AffiliateBookingSettlement;
 use App\Models\SystemConfig;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -955,6 +956,7 @@ class BookingController extends Controller
             $cancellationPayment = null;
 
             if ((string) $freshBooking->status === 'cancelled') {
+                $this->syncAffiliateSettlementOnCancellation($freshBooking);
                 $cancellationPayment = $this->captureCancellationPayment($freshBooking);
             }
 
@@ -1259,6 +1261,7 @@ class BookingController extends Controller
 
         $cancellationPayment = null;
         if ((string) $freshBooking->status === 'cancelled') {
+            $this->syncAffiliateSettlementOnCancellation($freshBooking);
             $cancellationPayment = $this->captureCancellationPayment($freshBooking);
         }
 
@@ -1358,6 +1361,7 @@ class BookingController extends Controller
         $booking->save();
 
         $freshBooking = $booking->fresh();
+        $this->syncAffiliateSettlementOnCancellation($freshBooking);
         $cancellationPayment = $this->captureCancellationPayment($freshBooking);
 
         $this->logBookingActivity(
@@ -1654,6 +1658,34 @@ class BookingController extends Controller
                 'user_agent' => (string) $request->userAgent(),
             ],
         ]);
+    }
+
+    private function syncAffiliateSettlementOnCancellation(Booking $booking): void
+    {
+        if (! $booking->affiliate_id || (string) $booking->status !== 'cancelled') {
+            return;
+        }
+
+        $affiliate = Affiliate::find($booking->affiliate_id);
+        if (! $affiliate) {
+            return;
+        }
+
+        $settlement = AffiliateBookingSettlement::firstOrNew([
+            'booking_id' => $booking->id,
+        ]);
+
+        $settlement->affiliate_id = $affiliate->id;
+        $settlement->gross_amount = 0;
+        $settlement->affiliate_percent = (float) ($affiliate->affiliate_payout_percent ?? 0);
+        $settlement->platform_percent = (float) ($affiliate->platform_commission_percent ?? 0);
+        $settlement->affiliate_amount = 0;
+        $settlement->platform_amount = 0;
+        $settlement->currency = strtolower((string) ($affiliate->payout_currency ?: 'usd'));
+        $settlement->status = 'pending';
+        $settlement->status_reason = 'booking_cancelled';
+        $settlement->accepted_at = $settlement->accepted_at ?: now();
+        $settlement->save();
     }
 
     private function buildCancellationPriceCalculation(float $cancellationFee, string $serviceType): array
