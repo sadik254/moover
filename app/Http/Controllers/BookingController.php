@@ -51,7 +51,8 @@ class BookingController extends Controller
             ], 422);
         }
 
-        $query = Booking::where('company_id', $company->id);
+        $query = Booking::with('driver:id,name')
+            ->where('company_id', $company->id);
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
