@@ -18,6 +18,84 @@ use Stripe\Transfer;
 
 class AffiliateSettlementController extends Controller
 {
+    public function mySettlements(Request $request)
+    {
+        $user = $request->user();
+        if (! $user instanceof User || (string) $user->user_type !== 'affiliate') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $affiliate = Affiliate::where('user_id', $user->id)->first();
+        if (! $affiliate) {
+            return response()->json(['message' => 'Affiliate profile not found'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'status' => ['sometimes', Rule::in(['pending', 'ready', 'on_hold', 'paid', 'failed'])],
+            'date_from' => 'sometimes|date',
+            'date_to' => 'sometimes|date|after_or_equal:date_from',
+            'per_page' => 'sometimes|integer|min:1|max:100',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => 'Validation failed', 'errors' => $validator->errors()], 422);
+        }
+
+        $query = AffiliateBookingSettlement::with(['booking:id,status,pickup_time,total_price,final_price'])
+            ->where('affiliate_id', $affiliate->id);
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->date_to);
+        }
+
+        $perPage = (int) $request->input('per_page', 20);
+        $data = $query->orderByDesc('id')->paginate($perPage)->withQueryString();
+
+        return response()->json(['data' => $data]);
+    }
+
+    public function myDisbursements(Request $request)
+    {
+        $user = $request->user();
+        if (! $user instanceof User || (string) $user->user_type !== 'affiliate') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $affiliate = Affiliate::where('user_id', $user->id)->first();
+        if (! $affiliate) {
+            return response()->json(['message' => 'Affiliate profile not found'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'status' => ['sometimes', Rule::in(['paid', 'failed'])],
+            'per_page' => 'sometimes|integer|min:1|max:100',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => 'Validation failed', 'errors' => $validator->errors()], 422);
+        }
+
+        $query = AffiliateDisbursement::with([
+            'booking:id,status,pickup_time,total_price,final_price',
+            'settlement:id,booking_id,status,status_reason',
+        ])->where('affiliate_id', $affiliate->id);
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $perPage = (int) $request->input('per_page', 20);
+        $data = $query->orderByDesc('id')->paginate($perPage)->withQueryString();
+
+        return response()->json(['data' => $data]);
+    }
+
     public function index(Request $request)
     {
         $user = $request->user();
@@ -251,4 +329,3 @@ class AffiliateSettlementController extends Controller
         }
     }
 }
-

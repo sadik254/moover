@@ -147,5 +147,7 @@ Route::middleware(['auth:sanctum', 'abilities:affiliate'])->get('affiliate/booki
 Route::middleware(['auth:sanctum', 'abilities:affiliate'])->post('affiliate/bookings/{id}/accept', [AffiliateController::class, 'acceptBooking']);
 Route::middleware(['auth:sanctum', 'abilities:affiliate'])->post('affiliate/bookings/{id}/reject', [AffiliateController::class, 'rejectBooking']);
 Route::middleware(['auth:sanctum', 'abilities:affiliate'])->post('affiliate/bookings/{id}/status', [AffiliateController::class, 'updateBookingStatus']);
+Route::middleware(['auth:sanctum', 'abilities:affiliate'])->get('affiliate/settlements', [AffiliateSettlementController::class, 'mySettlements']);
+Route::middleware(['auth:sanctum', 'abilities:affiliate'])->get('affiliate/disbursements', [AffiliateSettlementController::class, 'myDisbursements']);
 
 // Route::apiResource('affiliateclicks', AffiliateclickController::class);
