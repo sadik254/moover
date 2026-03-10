@@ -11,6 +11,7 @@ use App\Models\Customer;
 use App\Models\SystemConfig;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Stripe\Exception\ApiErrorException;
@@ -51,38 +52,56 @@ class BookingPaymentController extends Controller
             return response()->json(['received' => true]);
         }
 
-        $payment->status = (string) ($intentObject->status ?? $payment->status);
-        $payment->raw_payload = $intentObject ? (array) $intentObject : null;
+        $handledEvents = [
+            'payment_intent.requires_capture',
+            'payment_intent.succeeded',
+            'payment_intent.payment_failed',
+            'payment_intent.canceled',
+        ];
 
-        if (isset($intentObject->amount_received)) {
-            $payment->captured_amount = round(((int) $intentObject->amount_received) / 100, 2);
+        if (! in_array($event->type, $handledEvents, true)) {
+            Log::info('Stripe webhook ignored event', [
+                'event_type' => $event->type,
+                'payment_intent_id' => $intentId,
+            ]);
+
+            return response()->json(['received' => true]);
         }
 
-        if (! empty($intentObject->last_payment_error)) {
-            $payment->failure_code = $intentObject->last_payment_error->code ?? null;
-            $payment->failure_message = $intentObject->last_payment_error->message ?? null;
-        }
+        if (in_array($event->type, $handledEvents, true)) {
+            $payment->status = (string) ($intentObject->status ?? $payment->status);
+            $payment->raw_payload = $intentObject ? (array) $intentObject : null;
 
-        $payment->save();
-
-        $booking = $payment->booking;
-        if ($booking) {
-            switch ($event->type) {
-                case 'payment_intent.succeeded':
-                    $booking->payment_status = 'paid';
-                    break;
-                case 'payment_intent.payment_failed':
-                    $booking->payment_status = 'failed';
-                    break;
-                case 'payment_intent.canceled':
-                    $booking->payment_status = 'canceled';
-                    break;
-                default:
-                    $booking->payment_status = (string) ($intentObject->status ?? $booking->payment_status);
-                    break;
+            if (isset($intentObject->amount_received)) {
+                $payment->captured_amount = round(((int) $intentObject->amount_received) / 100, 2);
             }
 
-            $booking->save();
+            if (! empty($intentObject->last_payment_error)) {
+                $payment->failure_code = $intentObject->last_payment_error->code ?? null;
+                $payment->failure_message = $intentObject->last_payment_error->message ?? null;
+            }
+
+            $payment->save();
+
+            $booking = $payment->booking;
+            if ($booking) {
+                switch ($event->type) {
+                    case 'payment_intent.succeeded':
+                        $booking->payment_status = 'paid';
+                        break;
+                    case 'payment_intent.payment_failed':
+                        $booking->payment_status = 'failed';
+                        break;
+                    case 'payment_intent.canceled':
+                        $booking->payment_status = 'canceled';
+                        break;
+                    default:
+                        $booking->payment_status = (string) ($intentObject->status ?? $booking->payment_status);
+                        break;
+                }
+
+                $booking->save();
+            }
         }
 
         return response()->json(['received' => true]);
