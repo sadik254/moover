@@ -52,6 +52,13 @@ class BookingPaymentController extends Controller
             return response()->json(['received' => true]);
         }
 
+        Log::info('Stripe webhook received event', [
+            'event_type' => $event->type,
+            'payment_intent_id' => $intentId,
+            'booking_id' => $intentObject->metadata->booking_id ?? null,
+            'company_id' => $intentObject->metadata->company_id ?? null,
+        ]);
+
         $handledEvents = [
             'payment_intent.requires_capture',
             'payment_intent.succeeded',
