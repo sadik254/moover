@@ -375,6 +375,42 @@ class DriverController extends Controller
         ], 200);
     }
 
+    public function updateBookingStatus(Request $request, $id)
+    {
+        $driver = $request->user();
+
+        if (! $driver instanceof Driver) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'status' => ['required', Rule::in(['on_route', 'done'])],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $booking = Booking::where('driver_id', $driver->id)
+            ->where('id', $id)
+            ->first();
+
+        if (! $booking) {
+            return response()->json(['message' => 'Booking not found'], 404);
+        }
+
+        $booking->status = (string) $request->status;
+        $booking->save();
+
+        return response()->json([
+            'message' => 'Booking status updated successfully',
+            'data' => $booking->fresh(),
+        ]);
+    }
+
     public function myBookings(Request $request)
     {
         $driver = $request->user();

@@ -40,7 +40,7 @@ class BookingController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'status' => ['sometimes', 'nullable', Rule::in(['pending', 'confirmed', 'assigned', 'on_route', 'completed', 'cancelled'])],
+            'status' => ['sometimes', 'nullable', Rule::in(['pending', 'confirmed', 'assigned', 'on_route', 'completed', 'cancelled', 'done'])],
             'per_page' => 'sometimes|integer|min:1|max:100',
         ]);
 
@@ -81,7 +81,7 @@ class BookingController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'status' => ['sometimes', 'nullable', Rule::in(['pending', 'confirmed', 'assigned', 'on_route', 'completed', 'cancelled'])],
+            'status' => ['sometimes', 'nullable', Rule::in(['pending', 'confirmed', 'assigned', 'on_route', 'completed', 'cancelled', 'done'])],
             'per_page' => 'sometimes|integer|min:1|max:100',
         ]);
 
@@ -123,7 +123,7 @@ class BookingController extends Controller
         $validator = Validator::make($request->all(), [
             'date_from' => 'required|date',
             'date_to' => 'required|date|after_or_equal:date_from',
-            'status' => ['sometimes', 'nullable', Rule::in(['pending', 'confirmed', 'assigned', 'on_route', 'completed', 'cancelled'])],
+            'status' => ['sometimes', 'nullable', Rule::in(['pending', 'confirmed', 'assigned', 'on_route', 'completed', 'cancelled', 'done'])],
         ]);
 
         if ($validator->fails()) {
@@ -459,7 +459,7 @@ class BookingController extends Controller
             'congestion_charge' => 'nullable|numeric|min:0',
             'payment_method'  => 'nullable|string|max:100',
             'payment_status'  => 'nullable|string|max:100',
-            'status'          => ['nullable', Rule::in(['pending', 'confirmed', 'assigned', 'on_route', 'completed', 'cancelled'])],
+            'status'          => ['nullable', Rule::in(['pending', 'confirmed', 'assigned', 'on_route', 'completed', 'cancelled', 'done'])],
             'notes'           => 'nullable|string',
         ]);
 
@@ -787,7 +787,7 @@ class BookingController extends Controller
             'congestion_charge' => 'sometimes|nullable|numeric|min:0',
             'payment_method'  => 'sometimes|nullable|string|max:100',
             'payment_status'  => 'sometimes|nullable|string|max:100',
-            'status'          => ['sometimes', Rule::in(['pending', 'confirmed', 'assigned', 'on_route', 'completed', 'cancelled'])],
+            'status'          => ['sometimes', Rule::in(['pending', 'confirmed', 'assigned', 'on_route', 'completed', 'cancelled', 'done'])],
             'notes'           => 'sometimes|nullable|string',
         ]);
 
@@ -1218,7 +1218,7 @@ class BookingController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'status' => ['required', Rule::in(['pending', 'confirmed', 'assigned', 'on_route', 'completed', 'cancelled'])],
+            'status' => ['required', Rule::in(['pending', 'confirmed', 'assigned', 'on_route', 'completed', 'cancelled', 'done'])],
         ]);
 
         if ($validator->fails()) {
