@@ -4,6 +4,7 @@ use App\Http\Controllers\VehicleClassController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AffiliateclickController;
 use App\Http\Controllers\AffiliateController;
+use App\Http\Controllers\AffiliateDriverController;
 use App\Http\Controllers\FormsubmissionController;
 use App\Http\Controllers\FormtemplateController;
 use App\Http\Controllers\BookingController;
@@ -148,6 +149,11 @@ Route::middleware(['auth:sanctum', 'abilities:affiliate'])->get('affiliate/booki
 Route::middleware(['auth:sanctum', 'abilities:affiliate'])->post('affiliate/bookings/{id}/accept', [AffiliateController::class, 'acceptBooking']);
 Route::middleware(['auth:sanctum', 'abilities:affiliate'])->post('affiliate/bookings/{id}/reject', [AffiliateController::class, 'rejectBooking']);
 Route::middleware(['auth:sanctum', 'abilities:affiliate'])->post('affiliate/bookings/{id}/status', [AffiliateController::class, 'updateBookingStatus']);
+Route::middleware(['auth:sanctum', 'abilities:affiliate'])->get('affiliate/drivers', [AffiliateDriverController::class, 'index']);
+Route::middleware(['auth:sanctum', 'abilities:affiliate'])->post('affiliate/drivers', [AffiliateDriverController::class, 'store']);
+Route::middleware(['auth:sanctum', 'abilities:affiliate'])->get('affiliate/drivers/{id}', [AffiliateDriverController::class, 'show']);
+Route::middleware(['auth:sanctum', 'abilities:affiliate'])->post('affiliate/drivers/{id}/update', [AffiliateDriverController::class, 'update']);
+Route::middleware(['auth:sanctum', 'abilities:affiliate'])->delete('affiliate/drivers/{id}', [AffiliateDriverController::class, 'destroy']);
 Route::middleware(['auth:sanctum', 'abilities:affiliate'])->get('affiliate/settlements', [AffiliateSettlementController::class, 'mySettlements']);
 Route::middleware(['auth:sanctum', 'abilities:affiliate'])->get('affiliate/disbursements', [AffiliateSettlementController::class, 'myDisbursements']);
 

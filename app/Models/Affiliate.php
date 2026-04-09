@@ -48,4 +48,9 @@ class Affiliate extends Model
     {
         return $this->hasMany(AffiliateDisbursement::class);
     }
+
+    public function drivers()
+    {
+        return $this->hasMany(AffiliateDriver::class);
+    }
 }

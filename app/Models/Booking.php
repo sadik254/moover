@@ -8,6 +8,7 @@ use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Driver;
 use App\Models\Affiliate;
+use App\Models\AffiliateDriver;
 use App\Models\Vehicle;
 use App\Models\BookingPayment;
 use App\Models\BookingActivity;
@@ -27,6 +28,7 @@ class Booking extends Model
         'vehicle_id',
         'driver_id',
         'affiliate_id',
+        'assigned_affiliate_driver_id',
         'service_type',
         'pickup_address',
         'dropoff_address',
@@ -92,6 +94,11 @@ class Booking extends Model
     public function affiliate()
     {
         return $this->belongsTo(Affiliate::class);
+    }
+
+    public function assignedAffiliateDriver()
+    {
+        return $this->belongsTo(AffiliateDriver::class, 'assigned_affiliate_driver_id');
     }
 
     public function payments()

@@ -6,6 +6,7 @@ use App\Mail\AffiliateCreatedPasswordMail;
 use App\Mail\AffiliatePasswordResetCodeMail;
 use App\Models\Affiliate;
 use App\Models\AffiliateBookingSettlement;
+use App\Models\AffiliateDriver;
 use App\Models\Booking;
 use App\Models\Company;
 use App\Models\User;
@@ -415,6 +416,7 @@ class AffiliateController extends Controller
         $query = Booking::with([
                 'customer:id,name,email,phone',
                 'vehicle:id,name,plate_number,color,model,image',
+                'assignedAffiliateDriver:id,name,email,phone,status',
                 'settlement',
             ])
             ->where('affiliate_id', $affiliate->id)
@@ -457,6 +459,7 @@ class AffiliateController extends Controller
         $booking = Booking::with([
                 'customer:id,name,email,phone',
                 'vehicle:id,name,plate_number,color,model,image',
+                'assignedAffiliateDriver:id,name,email,phone,status',
             ])
             ->where('affiliate_id', $affiliate->id)
             ->where('id', $id)
@@ -482,7 +485,8 @@ class AffiliateController extends Controller
     public function updateBookingStatus(Request $request, $id)
     {
         $validator = Validator::make($request->all(), [
-            'affiliate_status' => ['required', Rule::in(['in_progress', 'completed', 'cancelled'])],
+            'affiliate_status' => ['required', Rule::in(['assigned_driver', 'in_progress', 'completed', 'cancelled'])],
+            'assigned_affiliate_driver_id' => 'sometimes|nullable|integer',
             'affiliate_reference' => 'sometimes|nullable|string|max:255',
             'affiliate_notes' => 'sometimes|nullable|string',
         ]);
@@ -497,7 +501,7 @@ class AffiliateController extends Controller
         return $this->updateAffiliateBookingState(
             request: $request,
             id: $id,
-           targetState: (string) $request->affiliate_status
+            targetState: (string) $request->affiliate_status
         );
     }
 
@@ -591,6 +595,32 @@ class AffiliateController extends Controller
 
         $booking->affiliate_status = $targetState;
 
+        if ($request->has('assigned_affiliate_driver_id')) {
+            $assignedDriverId = $request->assigned_affiliate_driver_id;
+
+            if ($assignedDriverId === null || $assignedDriverId === '') {
+                $booking->assigned_affiliate_driver_id = null;
+            } else {
+                $driver = AffiliateDriver::where('affiliate_id', $affiliate->id)
+                    ->where('id', $assignedDriverId)
+                    ->first();
+
+                if (! $driver) {
+                    return response()->json([
+                        'message' => 'Affiliate driver not found',
+                    ], 404);
+                }
+
+                if (! $this->isAffiliateDriverAvailable($booking, (int) $assignedDriverId)) {
+                    return response()->json([
+                        'message' => 'Affiliate driver is not available for the selected time',
+                    ], 422);
+                }
+
+                $booking->assigned_affiliate_driver_id = (int) $assignedDriverId;
+            }
+        }
+
         if ($request->has('affiliate_reference')) {
             $booking->affiliate_reference = $request->affiliate_reference;
         }
@@ -623,7 +653,8 @@ class AffiliateController extends Controller
 
         $allowedTransitions = [
             'offered' => ['accepted', 'rejected'],
-            'accepted' => ['in_progress', 'cancelled'],
+            'accepted' => ['assigned_driver', 'in_progress', 'cancelled'],
+            'assigned_driver' => ['in_progress', 'cancelled'],
             'in_progress' => ['completed', 'cancelled'],
             'rejected' => [],
             'completed' => [],
@@ -724,6 +755,35 @@ class AffiliateController extends Controller
                 'accepted_at' => now(),
             ]
         );
+    }
+
+    private function isAffiliateDriverAvailable(Booking $booking, int $driverId): bool
+    {
+        if (! $booking->pickup_time) {
+            return true;
+        }
+
+        $pickup = Carbon::parse($booking->pickup_time);
+        $dropoff = $booking->dropoff_time ? Carbon::parse($booking->dropoff_time) : null;
+
+        $windowStart = $dropoff ? $pickup : $pickup->copy()->subHours(2);
+        $windowEnd = $dropoff ? $dropoff : $pickup->copy()->addHours(2);
+
+        $conflict = Booking::where('assigned_affiliate_driver_id', $driverId)
+            ->where('id', '!=', $booking->id)
+            ->where(function ($query) use ($windowStart, $windowEnd) {
+                $query->where(function ($q) use ($windowStart, $windowEnd) {
+                    $q->whereNotNull('dropoff_time')
+                        ->where('pickup_time', '<=', $windowEnd)
+                        ->where('dropoff_time', '>=', $windowStart);
+                })->orWhere(function ($q) use ($windowStart, $windowEnd) {
+                    $q->whereNull('dropoff_time')
+                        ->whereBetween('pickup_time', [$windowStart, $windowEnd]);
+                });
+            })
+            ->exists();
+
+        return ! $conflict;
     }
 
     private function generateResetCode(): string
