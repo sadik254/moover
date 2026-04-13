@@ -10,6 +10,7 @@ use App\Models\Customer;
 use App\Models\Driver;
 use App\Models\Affiliate;
 use App\Models\AffiliateBookingSettlement;
+use App\Models\AffiliateDisbursement;
 use App\Models\SystemConfig;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -380,6 +381,108 @@ class BookingController extends Controller
                 'last_7_days_revenue' => $dailyRevenue,
                 'vehicle_utilization' => $vehicleUtilization,
                 'top_drivers' => $topDrivers,
+            ],
+        ]);
+    }
+
+    public function pendingCollectionsReport(Request $request)
+    {
+        $user = $request->user();
+        if (! $user instanceof User) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $company = $this->getCompany();
+        if (! $company) {
+            return response()->json(['message' => 'Company not found'], 404);
+        }
+
+        $start = now()->startOfMonth();
+        $end = now()->endOfMonth();
+
+        $pendingStatuses = ['pending', 'confirmed', 'assigned', 'on_route', 'in_progress'];
+
+        $pendingBookings = Booking::where('company_id', $company->id)
+            ->whereBetween('pickup_time', [$start, $end])
+            ->whereIn('status', $pendingStatuses);
+
+        $pendingCount = (clone $pendingBookings)->count();
+        $pendingEstimatedTotal = (float) (clone $pendingBookings)
+            ->selectRaw('SUM(COALESCE(final_price, total_price, 0)) as total')
+            ->value('total');
+
+        $dueCount = $pendingCount;
+
+        $pendingAffiliateStatuses = ['pending', 'ready', 'on_hold', 'failed'];
+        $pendingAffiliateCommission = (float) AffiliateBookingSettlement::query()
+            ->join('bookings', 'affiliate_booking_settlements.booking_id', '=', 'bookings.id')
+            ->where('bookings.company_id', $company->id)
+            ->whereBetween('bookings.pickup_time', [$start, $end])
+            ->whereIn('affiliate_booking_settlements.status', $pendingAffiliateStatuses)
+            ->sum('affiliate_booking_settlements.affiliate_amount');
+
+        $lastBookingPayments = BookingPayment::query()
+            ->join('bookings', 'booking_payments.booking_id', '=', 'bookings.id')
+            ->where('bookings.company_id', $company->id)
+            ->selectRaw("
+                booking_payments.id as transaction_id,
+                'booking_payment' as type,
+                booking_payments.booking_id as booking_id,
+                NULL as affiliate_id,
+                COALESCE(booking_payments.captured_amount, booking_payments.authorized_amount, booking_payments.estimated_amount, 0) as amount,
+                booking_payments.currency as currency,
+                booking_payments.status as status,
+                booking_payments.created_at as created_at
+            ");
+
+        $lastDisbursements = AffiliateDisbursement::query()
+            ->join('bookings', 'affiliate_disbursements.booking_id', '=', 'bookings.id')
+            ->where('bookings.company_id', $company->id)
+            ->selectRaw("
+                affiliate_disbursements.id as transaction_id,
+                'affiliate_disbursement' as type,
+                affiliate_disbursements.booking_id as booking_id,
+                affiliate_disbursements.affiliate_id as affiliate_id,
+                affiliate_disbursements.amount as amount,
+                affiliate_disbursements.currency as currency,
+                affiliate_disbursements.status as status,
+                affiliate_disbursements.created_at as created_at
+            ");
+
+        $lastTransactions = $lastBookingPayments
+            ->unionAll($lastDisbursements)
+            ->orderByDesc('created_at')
+            ->limit(10)
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'transaction_id' => (int) $row->transaction_id,
+                    'type' => $row->type,
+                    'booking_id' => $row->booking_id ? (int) $row->booking_id : null,
+                    'affiliate_id' => $row->affiliate_id ? (int) $row->affiliate_id : null,
+                    'amount' => round((float) $row->amount, 2),
+                    'currency' => $row->currency,
+                    'status' => $row->status,
+                    'created_at' => $row->created_at,
+                ];
+            });
+
+        return response()->json([
+            'data' => [
+                'range' => [
+                    'from' => $start->toDateString(),
+                    'to' => $end->toDateString(),
+                ],
+                'pending_collections' => [
+                    'pending_count' => $pendingCount,
+                    'due_count' => $dueCount,
+                    'estimated_total' => round($pendingEstimatedTotal, 2),
+                ],
+                'pending_affiliate_commissions' => [
+                    'total' => round($pendingAffiliateCommission, 2),
+                    'statuses' => $pendingAffiliateStatuses,
+                ],
+                'last_10_transactions' => $lastTransactions,
             ],
         ]);
     }
