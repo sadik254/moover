@@ -101,6 +101,7 @@ Route::post('bookings', [BookingController::class, 'store']); // public: quote +
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings', [BookingController::class, 'index']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings/export/csv', [BookingController::class, 'exportCsv']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings/dashboard-summary', [BookingController::class, 'dashboardSummary']);
+Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings/report', [BookingController::class, 'reportSummary']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings/live-operations-feed', [BookingController::class, 'liveOperationsFeed']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings/vehicle-availability', [BookingController::class, 'vehicleAvailability']);
 Route::middleware(['auth:sanctum', 'user.only:admin,dispatcher'])->get('bookings/recent-activity', [BookingController::class, 'recentActivity']);

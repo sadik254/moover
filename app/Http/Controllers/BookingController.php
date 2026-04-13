@@ -300,6 +300,90 @@ class BookingController extends Controller
         ]);
     }
 
+    public function reportSummary(Request $request)
+    {
+        $user = $request->user();
+        if (! $user instanceof User) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $company = $this->getCompany();
+        if (! $company) {
+            return response()->json(['message' => 'Company not found'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'date_from' => 'sometimes|date',
+            'date_to' => 'sometimes|date|after_or_equal:date_from',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $hasCustomRange = $request->filled('date_from') && $request->filled('date_to');
+        if ($hasCustomRange) {
+            $start = Carbon::parse($request->date_from)->startOfDay();
+            $end = Carbon::parse($request->date_to)->endOfDay();
+        } else {
+            $start = now()->startOfMonth();
+            $end = now()->endOfMonth();
+        }
+
+        $completedStatuses = ['completed', 'done'];
+
+        $totalRevenue = $this->sumRevenue($company->id, $start, $end, $completedStatuses);
+        $completedRevenue = $this->sumCompletedRevenue($company->id, $start, $end, $completedStatuses);
+        $completedTrips = $this->countCompletedTrips($company->id, $start, $end, $completedStatuses);
+        $avgTripValue = $completedTrips > 0 ? round($completedRevenue / $completedTrips, 2) : 0.0;
+        $affiliatePayout = $this->sumAffiliatePayout($company->id, $start, $end);
+        $netProfit = round($totalRevenue - $affiliatePayout, 2);
+
+        $comparison = null;
+        if (! $hasCustomRange) {
+            $lastStart = $start->copy()->subMonthNoOverflow()->startOfMonth();
+            $lastEnd = $start->copy()->subMonthNoOverflow()->endOfMonth();
+
+            $lastTotalRevenue = $this->sumRevenue($company->id, $lastStart, $lastEnd, $completedStatuses);
+            $lastCompletedRevenue = $this->sumCompletedRevenue($company->id, $lastStart, $lastEnd, $completedStatuses);
+            $lastCompletedTrips = $this->countCompletedTrips($company->id, $lastStart, $lastEnd, $completedStatuses);
+            $lastAvgTripValue = $lastCompletedTrips > 0 ? round($lastCompletedRevenue / $lastCompletedTrips, 2) : 0.0;
+            $lastAffiliatePayout = $this->sumAffiliatePayout($company->id, $lastStart, $lastEnd);
+            $lastNetProfit = round($lastTotalRevenue - $lastAffiliatePayout, 2);
+
+            $comparison = [
+                'total_revenue_percent' => $this->percentageChange((int) round($totalRevenue * 100), (int) round($lastTotalRevenue * 100)),
+                'completed_trips_percent' => $this->percentageChange($completedTrips, $lastCompletedTrips),
+                'avg_trip_value_percent' => $this->percentageChange((int) round($avgTripValue * 100), (int) round($lastAvgTripValue * 100)),
+                'net_profit_percent' => $this->percentageChange((int) round($netProfit * 100), (int) round($lastNetProfit * 100)),
+            ];
+        }
+
+        $dailyRevenue = $this->buildDailyRevenueSeries($company->id, $completedStatuses, $hasCustomRange ? $end : now());
+        $vehicleUtilization = $this->buildVehicleUtilization($company->id, $start, $end, $completedStatuses);
+        $topDrivers = $this->buildTopDrivers($company->id, $start, $end, $completedStatuses);
+
+        return response()->json([
+            'data' => [
+                'range' => [
+                    'from' => $start->toDateString(),
+                    'to' => $end->toDateString(),
+                ],
+                'total_revenue' => round($totalRevenue, 2),
+                'completed_trips' => $completedTrips,
+                'avg_trip_value' => round($avgTripValue, 2),
+                'net_profit' => $netProfit,
+                'comparison_vs_last_month' => $comparison,
+                'last_7_days_revenue' => $dailyRevenue,
+                'vehicle_utilization' => $vehicleUtilization,
+                'top_drivers' => $topDrivers,
+            ],
+        ]);
+    }
+
     public function recentActivity(Request $request)
     {
         $user = $request->user();
@@ -1613,6 +1697,128 @@ class BookingController extends Controller
         }
 
         return round((($today - $yesterday) / $yesterday) * 100, 2);
+    }
+
+    private function sumRevenue(int $companyId, Carbon $start, Carbon $end, array $completedStatuses): float
+    {
+        return (float) Booking::where('company_id', $companyId)
+            ->where('payment_status', 'paid')
+            ->whereBetween('pickup_time', [$start, $end])
+            ->where(function ($query) use ($completedStatuses) {
+                $query->whereIn('status', $completedStatuses)
+                    ->orWhere('status', 'cancelled');
+            })
+            ->sum('final_price');
+    }
+
+    private function sumCompletedRevenue(int $companyId, Carbon $start, Carbon $end, array $completedStatuses): float
+    {
+        return (float) Booking::where('company_id', $companyId)
+            ->where('payment_status', 'paid')
+            ->whereBetween('pickup_time', [$start, $end])
+            ->whereIn('status', $completedStatuses)
+            ->sum('final_price');
+    }
+
+    private function countCompletedTrips(int $companyId, Carbon $start, Carbon $end, array $completedStatuses): int
+    {
+        return (int) Booking::where('company_id', $companyId)
+            ->where('payment_status', 'paid')
+            ->whereBetween('pickup_time', [$start, $end])
+            ->whereIn('status', $completedStatuses)
+            ->count();
+    }
+
+    private function sumAffiliatePayout(int $companyId, Carbon $start, Carbon $end): float
+    {
+        return (float) AffiliateBookingSettlement::query()
+            ->join('bookings', 'affiliate_booking_settlements.booking_id', '=', 'bookings.id')
+            ->where('bookings.company_id', $companyId)
+            ->whereBetween('bookings.pickup_time', [$start, $end])
+            ->where('affiliate_booking_settlements.status', 'paid')
+            ->sum('affiliate_booking_settlements.affiliate_amount');
+    }
+
+    private function buildDailyRevenueSeries(int $companyId, array $completedStatuses, Carbon $endDate): array
+    {
+        $days = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $date = $endDate->copy()->subDays($i)->startOfDay();
+            $dayStart = $date->copy()->startOfDay();
+            $dayEnd = $date->copy()->endOfDay();
+
+            $revenue = $this->sumRevenue($companyId, $dayStart, $dayEnd, $completedStatuses);
+            $days[] = [
+                'date' => $date->toDateString(),
+                'revenue' => round($revenue, 2),
+            ];
+        }
+
+        return $days;
+    }
+
+    private function buildVehicleUtilization(int $companyId, Carbon $start, Carbon $end, array $completedStatuses): array
+    {
+        $rows = Booking::where('company_id', $companyId)
+            ->where('payment_status', 'paid')
+            ->whereBetween('pickup_time', [$start, $end])
+            ->whereIn('status', $completedStatuses)
+            ->whereNotNull('vehicle_id')
+            ->selectRaw('vehicle_id, COUNT(*) as trips')
+            ->groupBy('vehicle_id')
+            ->get();
+
+        $totalTrips = (int) $rows->sum('trips');
+        if ($totalTrips === 0) {
+            return [];
+        }
+
+        $vehicleIds = $rows->pluck('vehicle_id')->all();
+        $vehicles = Vehicle::whereIn('id', $vehicleIds)->get(['id', 'name'])->keyBy('id');
+
+        return $rows->map(function ($row) use ($vehicles, $totalTrips) {
+            $vehicle = $vehicles->get($row->vehicle_id);
+            $percent = $totalTrips > 0 ? round(($row->trips / $totalTrips) * 100, 2) : 0;
+
+            return [
+                'vehicle_id' => $row->vehicle_id,
+                'vehicle_name' => $vehicle?->name,
+                'trips' => (int) $row->trips,
+                'utilization_percent' => $percent,
+            ];
+        })->sortByDesc('utilization_percent')->values()->all();
+    }
+
+    private function buildTopDrivers(int $companyId, Carbon $start, Carbon $end, array $completedStatuses): array
+    {
+        $rows = Booking::where('company_id', $companyId)
+            ->where('payment_status', 'paid')
+            ->whereBetween('pickup_time', [$start, $end])
+            ->whereIn('status', $completedStatuses)
+            ->whereNotNull('driver_id')
+            ->selectRaw('driver_id, COUNT(*) as trips, SUM(final_price) as revenue')
+            ->groupBy('driver_id')
+            ->orderByDesc('trips')
+            ->limit(3)
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        $driverIds = $rows->pluck('driver_id')->all();
+        $drivers = Driver::whereIn('id', $driverIds)->get(['id', 'name'])->keyBy('id');
+
+        return $rows->map(function ($row) use ($drivers) {
+            $driver = $drivers->get($row->driver_id);
+
+            return [
+                'driver_id' => $row->driver_id,
+                'driver_name' => $driver?->name,
+                'trips' => (int) $row->trips,
+                'earned_revenue' => round((float) $row->revenue, 2),
+            ];
+        })->values()->all();
     }
 
     private function diffValues(array $before, array $after): array
