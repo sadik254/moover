@@ -28,7 +28,10 @@ class SystemConfigController extends Controller
         }
 
         return response()->json([
-            'data' => $config
+            'data' => [
+                'config' => $config,
+                'company_logo' => $company->logo,
+            ],
         ]);
     }
 
